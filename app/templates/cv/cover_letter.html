@@ -1,0 +1,31 @@
+{% set letter_text = letter if letter is defined else (generation.cover_letter if generation is defined else '') %}
+{% if standalone %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Cover letter{% if job %} · {{ job.company }}{% endif %}</title>
+  <link rel="stylesheet" href="/static/cv.css">
+</head>
+<body class="cv-page">
+{% endif %}
+<article class="letter">
+  <div class="sender">
+    <h1>{{ cv.contact.full_name }}</h1>
+    <p class="meta">
+      {{ [cv.contact.email, cv.contact.phone, cv.contact.location] | reject('equalto', '') | join(' · ') }}
+    </p>
+    {% if job %}
+    <p class="meta">{{ job.title }}{% if job.company %} · {{ job.company }}{% endif %}</p>
+    {% endif %}
+  </div>
+  <div class="body">
+    {% for para in letter_text.split('\n\n') %}
+    <p>{{ para }}</p>
+    {% endfor %}
+  </div>
+</article>
+{% if standalone %}
+</body>
+</html>
+{% endif %}

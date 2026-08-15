@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Resumeer{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/jobs">Resum<span>eer</span></a>
+    <nav>
+      <a href="/jobs" class="{{ 'active' if active == 'jobs' else '' }}">Job descriptions</a>
+      <a href="/profile" class="{{ 'active' if active == 'profile' else '' }}">Profile</a>
+    </nav>
+    <div class="llm-pill {{ 'ok' if llm.ok else 'bad' }}" title="{{ llm.message }}">{{ llm.message }}</div>
+  </header>
+  <main class="wrap">
+    {% block content %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

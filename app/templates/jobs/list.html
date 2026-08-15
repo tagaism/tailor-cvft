@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Job descriptions · Resumeer{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Job descriptions</h1>
+    <p class="lede">Save a posting, then build a tailored CV underneath it.</p>
+  </div>
+  <a class="btn" href="/jobs/new">Add job</a>
+</div>
+
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+{% if jobs %}
+<div class="job-grid">
+  {% for job in jobs %}
+  <a class="card job-card" href="/jobs/{{ job.id }}">
+    <div>
+      <span class="badge {{ 'built' if job.latest_generation else '' }}">
+        {{ 'Built' if job.latest_generation else 'Not built' }}
+      </span>
+    </div>
+    <h2>{{ job.title or 'Untitled role' }}</h2>
+    <div class="meta">
+      {{ job.company or 'Unknown company' }}
+      · {{ job.source_host }}
+      · {{ job.created_at.strftime('%Y-%m-%d') if job.created_at else '' }}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="panel empty">
+  <p>No jobs yet. Add a careers-page URL or paste a LinkedIn posting.</p>
+  <p><a class="btn" href="/jobs/new">Add job</a></p>
+</div>
+{% endif %}
+{% endblock %}
