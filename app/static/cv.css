@@ -29,6 +29,12 @@
   margin: 0.55rem 0 0.15rem;
   text-align: justify;
   font-size: 11pt;
+  min-height: 1.3em;
+}
+.cv .intro:empty:not(.is-editing)::before {
+  content: "Click to add an intro.";
+  color: #78716c;
+  font-style: italic;
 }
 .cv h2 {
   font-family: "Times New Roman", Times, serif;
@@ -59,15 +65,20 @@
 .cv .dates { font-style: italic; }
 .cv ul { margin: 0.15rem 0 0; padding-left: 1.25rem; }
 .cv li { margin: 0.08rem 0; }
-.cv-bullet { cursor: text; border-radius: 2px; outline: none; }
-.cv-bullet:hover { background: rgba(154, 52, 18, 0.06); }
-.cv-bullet.is-editing {
+.cv-bullet,
+.cv-edit { cursor: text; border-radius: 2px; outline: none; }
+.cv-bullet:hover,
+.cv-edit:hover { background: rgba(154, 52, 18, 0.06); }
+.cv-bullet.is-editing,
+.cv-edit.is-editing {
   background: #fff8ef;
   box-shadow: 0 0 0 1px #d6c7b2;
   padding: 0.05rem 0.15rem;
 }
-.cv-bullet.is-saved { background: #ecfccb; }
-.cv-bullet.is-error { background: #ffe4e6; }
+.cv-bullet.is-saved,
+.cv-edit.is-saved { background: #ecfccb; }
+.cv-bullet.is-error,
+.cv-edit.is-error { background: #ffe4e6; }
 .cv-fmt {
   position: absolute;
   z-index: 40;

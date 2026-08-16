@@ -50,7 +50,7 @@
   });
 
   article.addEventListener("click", (event) => {
-    const item = event.target.closest(".cv-bullet");
+    const item = event.target.closest("[data-path]");
     if (!item || !article.contains(item)) return;
     if (active === item) return;
     if (active) active.blur();
@@ -73,6 +73,10 @@
     if (!active) return;
     if (event.key === "Enter") {
       event.preventDefault();
+      if (active.classList.contains("intro")) {
+        document.execCommand("insertLineBreak", false, null);
+        return;
+      }
       active.blur();
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
@@ -102,7 +106,7 @@
   article.addEventListener(
     "blur",
     (event) => {
-      const item = event.target.closest(".cv-bullet");
+      const item = event.target.closest("[data-path]");
       if (!item) return;
       if (suppressBlur) {
         suppressBlur = false;

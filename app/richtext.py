@@ -13,12 +13,19 @@ class _RichParser(HTMLParser):
         self.stack: list[str] = []
 
     def handle_starttag(self, tag: str, attrs) -> None:
+        if tag.lower() in {"br", "div", "p"}:
+            if tag.lower() == "br" or self.parts:
+                self.parts.append("<br>")
+            return
         mapped = _map_tag(tag)
         if mapped:
             self.parts.append(f"<{mapped}>")
             self.stack.append(mapped)
 
     def handle_endtag(self, tag: str) -> None:
+        if tag.lower() in {"div", "p"}:
+            self.parts.append("<br>")
+            return
         mapped = _map_tag(tag)
         if mapped and mapped in self.stack:
             while self.stack:
@@ -35,7 +42,9 @@ class _RichParser(HTMLParser):
         while self.stack:
             self.parts.append(f"</{self.stack.pop()}>")
         text = "".join(self.parts)
-        text = re.sub(r"\s+", " ", text).strip()
+        text = re.sub(r"[ \t]+", " ", text)
+        text = re.sub(r"(?:<br>\s*){3,}", "<br><br>", text)
+        text = re.sub(r"^(?:<br>)+|(?:<br>)+$", "", text).strip()
         return text
 
 
@@ -87,11 +96,13 @@ def rich_tokens(value: str) -> list[tuple[str, str]]:
         return ""
 
     pos = 0
-    for match in re.finditer(r"</?(b|i)>", clean):
+    for match in re.finditer(r"<br\s*/?>|</?(b|i)>", clean, flags=re.I):
         if match.start() > pos:
             tokens.append((style(), html.unescape(clean[pos : match.start()])))
-        tag = match.group(0)
-        if tag == "<b>":
+        tag = match.group(0).lower()
+        if tag.startswith("<br"):
+            tokens.append(("br", "\n"))
+        elif tag == "<b>":
             bold = True
         elif tag == "</b>":
             bold = False
