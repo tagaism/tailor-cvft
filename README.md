@@ -9,6 +9,7 @@
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white">
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-Jinja2-009688?style=for-the-badge&logo=fastapi&logoColor=white">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white">
   <img alt="LM Studio" src="https://img.shields.io/badge/LLM-LM%20Studio%20local-111111?style=for-the-badge">
   <img alt="Offline" src="https://img.shields.io/badge/data-stays%20on%20disk-8A4B08?style=for-the-badge">
 </p>
@@ -19,13 +20,13 @@ Resumeer is a single-user web app for people who apply often and refuse to hand 
 
 You keep **one source-of-truth profile**. Under each **job description** you generate a tailored pack: Times-style CV, cover letter, and an honest match report. Companies and application status live next to the posting — Saved → Applied → Under consideration → Rejected / Declined.
 
-The LLM is [LM Studio](https://lmstudio.ai) on `localhost`. Facts may be rephrased or reordered. They are not invented.
+The LLM is [LM Studio](https://lmstudio.ai) on your machine. Facts may be rephrased or reordered. They are not invented.
 
 ```
   Profile  +  Job posting  +  your notes
                  │
                  ▼
-         LM Studio (local)
+         LM Studio (host)
                  │
                  ▼
      ┌───────────┼───────────┐
@@ -52,6 +53,7 @@ LinkedIn and some ATS pages block scraping. The job is still saved — paste the
 /jobs/{id}       Source + status + Build tailored pack + results
 /companies       Employers (created when you name a company)
 /profile         Contact, experience, upload PDF / DOCX / TXT
+/health          Liveness probe (used by Docker)
 ```
 
 **Add a position** with company name, URL (optional), job description, required skills, desired skills, and notes.
@@ -60,24 +62,71 @@ LinkedIn and some ATS pages block scraping. The job is still saved — paste the
 
 `Saved` → `Applied` → `Under consideration` → `Rejected` (they said no) or `Declined` (you said no)
 
-## Quick start
+## Run with Docker
+
+Preferred if you already have [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Engine + Compose).
+
+1. Start **Docker Desktop** so the daemon is up.
+2. In LM Studio: load a chat model, start the local server on port **1234**, and allow network / `0.0.0.0` (not only `127.0.0.1`).
+3. From the repo:
 
 ```bash
-git clone <your-remote> resumeer
-cd resumeer
+cp .env.example .env
+mkdir -p data
+docker compose up --build
+```
+
+4. Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+
+| Piece | Role |
+| --- | --- |
+| `Dockerfile` | Python 3.12 slim, installs `requirements.txt`, serves with uvicorn |
+| `docker-compose.yml` | Maps `8000:8000`, mounts `./data` → `/data` |
+| `.dockerignore` | Keeps `.venv`, `.git`, `data/`, `.env` out of the image |
+
+Compose **overrides** two values so the container works:
+
+| Variable | In the container |
+| --- | --- |
+| `DATA_DIR` | `/data` (your `./data` folder) |
+| `LLM_BASE_URL` | `http://host.docker.internal:1234/v1` |
+
+`localhost` inside the container is not your Mac. `host.docker.internal` is. Linux already has `extra_hosts: host.docker.internal:host-gateway` in the Compose file.
+
+```bash
+docker compose logs -f web    # follow app logs
+docker compose down           # stop
+docker compose up -d --build  # rebuild and run in the background
+```
+
+**Port 8000 already in use?** Stop a local `uvicorn` first.
+
+**Banner cannot reach LM Studio?** Confirm the model server is on `0.0.0.0:1234`, then:
+
+```bash
+docker compose exec web python -c "import httpx; print(httpx.get('http://host.docker.internal:1234/v1/models', timeout=3).status_code)"
+```
+
+You should see `200`.
+
+## Run without Docker
+
+```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Start LM Studio, load a chat model, turn on the local server (**Developer** tab, port `1234`).
+Start LM Studio on `http://127.0.0.1:1234`, then:
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000). Here `LLM_BASE_URL` stays `http://127.0.0.1:1234/v1` as in `.env.example`.
+
+## First session
 
 1. **Profile** — upload a CV or fill the form.
 2. **Positions** — add the job.
@@ -87,12 +136,15 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
 ## LM Studio
 
-| Setting | Default |
-| --- | --- |
-| `LLM_BASE_URL` | `http://127.0.0.1:1234/v1` |
-| `LLM_API_KEY` | `lm-studio` (SDK needs a string; LM Studio ignores it unless you set a token) |
-| `LLM_MODEL` | empty → first chat model from `GET /v1/models` |
-| `LLM_TIMEOUT` | `600` seconds |
+| Setting | Host (venv) | Docker Compose |
+| --- | --- | --- |
+| `LLM_BASE_URL` | `http://127.0.0.1:1234/v1` | `http://host.docker.internal:1234/v1` |
+| `LLM_API_KEY` | `lm-studio` | same |
+| `LLM_MODEL` | empty → first chat model from `GET /v1/models` | same |
+| `LLM_TIMEOUT` | `600` seconds | same |
+| `DATA_DIR` | `./data` | `/data` |
+
+The SDK needs a string for the key; LM Studio ignores it unless you set a token.
 
 OpenAI-compatible calls:
 
@@ -121,6 +173,7 @@ profile.json + uploads under ./data   ← gitignored
 fpdf2  →  Times New Roman PDF
 httpx + trafilatura  →  job URL fetch
 openai SDK  →  LM Studio /v1
+Docker Compose  →  optional packaging
 ```
 
 ```
@@ -130,11 +183,13 @@ app/
   templates/   positions, companies, profile, CV preview
   cv_layout.py skill groups + contact line
   schemas.py   Profile, Position, Company, ApplicationStatus
+Dockerfile
+docker-compose.yml
 ```
 
 ## Data
 
-Everything stays in `./data` on your disk.
+Everything stays in `./data` on your disk (bind-mounted when you use Compose).
 
 | File | What |
 | --- | --- |

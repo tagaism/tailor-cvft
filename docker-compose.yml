@@ -1,0 +1,17 @@
+services:
+  web:
+    build: .
+    image: resumeer:local
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /data
+      # Container localhost is not your Mac. LM Studio stays on the host.
+      LLM_BASE_URL: http://host.docker.internal:1234/v1
+    volumes:
+      - ./data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

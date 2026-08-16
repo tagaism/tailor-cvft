@@ -22,6 +22,11 @@ app.include_router(companies.router)
 app.include_router(profile.router)
 
 
+@app.get("/health")
+async def health():
+    return {"ok": True}
+
+
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     from fastapi.responses import RedirectResponse
