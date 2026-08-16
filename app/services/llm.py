@@ -290,7 +290,7 @@ def tailor_pack(
         "- Skills MUST be four labeled lines only (omit a line if empty), using only skills from the profile:\n"
         "  Languages: ...\n  Databases: ...\n  Frameworks: ...\n  Technologies and Tools: ...\n"
         "- additional_skills: spoken languages or extras already in the profile. Use [] if none.\n"
-        "- Keep summary to at most 2 sentences in JSON (the rendered CV template does not show it).\n"
+        "- summary: 2-4 sentences, tailored intro placed under the name and above Technical Skills. Facts only.\n"
         "- One-page friendly: 3–6 bullets per recent role; fewer for older roles.\n"
         "- Cover letter: 180–250 words, specific to this job, no fake claims, plain text paragraphs.\n"
         "- Match analysis must be honest and SHORT: at most 6 items per list, short phrases only.\n"

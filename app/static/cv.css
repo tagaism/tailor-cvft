@@ -25,6 +25,11 @@
   margin: 0.28rem 0 0;
 }
 .cv .contact-line a { color: inherit; text-decoration: none; }
+.cv .intro {
+  margin: 0.55rem 0 0.15rem;
+  text-align: justify;
+  font-size: 11pt;
+}
 .cv h2 {
   font-family: "Times New Roman", Times, serif;
   font-size: 12pt;

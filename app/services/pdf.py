@@ -121,6 +121,10 @@ def cv_to_pdf(cv: Profile) -> bytes:
     if bits:
         _write(pdf, " | ".join(bits), height=5, size=10, align="C")
 
+    if cv.summary:
+        pdf.ln(1.6)
+        _write(pdf, cv.summary, height=5, size=11)
+
     def heading(title: str) -> None:
         pdf.ln(2.2)
         _write(pdf, title.upper(), height=6, style="B", size=12)
