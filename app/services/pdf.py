@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from io import BytesIO
 
 from fpdf import FPDF
@@ -83,9 +84,13 @@ def _write_rich(pdf: FPDF, html_text: str, *, indent: float = 0, prefix: str = "
         pdf.write(5, prefix)
     tokens = rich_tokens(html_text)
     if not tokens:
-        pdf.write(5, _safe(html_text))
+        pdf.write(5, _safe(re.sub(r"<[^>]+>", "", html_text or "")))
     else:
         for style, text in tokens:
+            if style == "br":
+                pdf.ln(5)
+                pdf.set_x(pdf.l_margin + indent)
+                continue
             pdf.set_font("Times", style, 11)
             pdf.write(5, _safe(text))
     pdf.ln(5)
@@ -140,7 +145,7 @@ def cv_to_pdf(cv: Profile) -> bytes:
 
     if cv.summary:
         pdf.ln(1.6)
-        _write(pdf, cv.summary, height=5, size=11)
+        _write_rich(pdf, cv.summary, prefix="")
 
     def heading(title: str) -> None:
         pdf.ln(2.2)

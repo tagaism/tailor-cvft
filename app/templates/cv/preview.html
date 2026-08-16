@@ -14,8 +14,8 @@
     <p class="contact-line">{{ cv_contact_bits(cv) | join(' | ') }}</p>
   </header>
 
-  {% if cv.summary %}
-  <p class="intro">{{ cv.summary }}</p>
+  {% if job or cv.summary %}
+  <p class="intro cv-edit" data-path="summary">{% if cv.summary %}{{ cv.summary | rich | safe }}{% endif %}</p>
   {% endif %}
 
   {% if cv.skills %}
