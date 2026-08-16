@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ job.title or 'Job' }} · Resumeer{% endblock %}
+{% block title %}{{ job.title or 'Job' }} · tailor-cvft{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="/static/cv.css">
 {% endblock %}
@@ -98,7 +98,7 @@
   <p class="lede">Uses your saved profile and this job text. Local models often take 3–10 minutes (reasoning plus writing). Leave this tab open until the page reloads.</p>
   <form id="build-form" method="post" action="/jobs/{{ job.id }}/build">
     <div class="btn-row">
-      <button class="btn" type="submit" {% if not profile.is_ready() or not job.source_text.strip() %}disabled{% endif %}>Build tailored pack</button>
+      <button class="btn" type="submit" {% if not profile.is_ready() or not (job.source_text or '')|trim %}disabled{% endif %}>Build tailored pack</button>
       <span class="busy">LM Studio is writing the CV, letter, and match report. Do not close or refresh this tab…</span>
     </div>
   </form>
@@ -108,7 +108,7 @@
 <section id="results" class="results">
   <div class="panel">
     <h2>Match analysis</h2>
-    <p class="meta">Built {{ generation.created_at.strftime('%Y-%m-%d %H:%M') }} UTC · {{ generation.model_name }}</p>
+    <p class="meta">Built {{ generation.created_at.strftime('%Y-%m-%d %H:%M') if generation.created_at else '' }} UTC · {{ generation.model_name }}</p>
 
     {% if match.matched_skills %}
     <h3>Matched skills</h3>
@@ -152,6 +152,7 @@
   <div class="panel">
     <div class="repeat-head">
       <h2>Tailored CV</h2>
+      <p class="meta">Click a bullet to edit. Use B / I for bold and italic. Click outside to save.</p>
       <div class="btn-row">
         <a class="btn secondary" href="/jobs/{{ job.id }}/preview" target="_blank">Open preview</a>
         <a class="btn" href="/jobs/{{ job.id }}/pdf">Download PDF</a>

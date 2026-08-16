@@ -5,6 +5,7 @@ from io import BytesIO
 from fpdf import FPDF
 
 from app.cv_layout import contact_bits, role_dates, skill_lines
+from app.richtext import rich_tokens
 from app.schemas import Profile
 
 
@@ -75,6 +76,22 @@ def _write(
     )
 
 
+def _write_rich(pdf: FPDF, html_text: str, *, indent: float = 0, prefix: str = "-  ") -> None:
+    pdf.set_x(pdf.l_margin + indent)
+    pdf.set_font("Times", "", 11)
+    if prefix:
+        pdf.write(5, prefix)
+    tokens = rich_tokens(html_text)
+    if not tokens:
+        pdf.write(5, _safe(html_text))
+    else:
+        for style, text in tokens:
+            pdf.set_font("Times", style, 11)
+            pdf.write(5, _safe(text))
+    pdf.ln(5)
+    pdf.set_x(pdf.l_margin)
+
+
 def _split_row(pdf: FPDF, left_top: str, left_bottom: str, right_top: str, right_bottom: str) -> None:
     epw = _usable_width(pdf)
     left_w = epw * 0.64
@@ -135,15 +152,15 @@ def cv_to_pdf(cv: Profile) -> bytes:
     lines = skill_lines(cv)
     if lines:
         heading("Technical Skills")
-        for line in lines:
-            _write(pdf, f"-  {line}", indent=4)
+        for line in cv.skills or lines:
+            _write_rich(pdf, line, indent=4)
 
     if cv.experience:
         heading("Professional Experience")
         for role in cv.experience:
             _split_row(pdf, role.company, role.title, role.location, role_dates(role))
             for bullet in role.bullets:
-                _write(pdf, f"-  {bullet}", indent=6)
+                _write_rich(pdf, bullet, indent=6)
             pdf.ln(1.4)
 
     if cv.projects:
@@ -151,7 +168,7 @@ def cv_to_pdf(cv: Profile) -> bytes:
         for project in cv.projects:
             _split_row(pdf, project.name, project.description, "", project.url)
             for bullet in project.bullets:
-                _write(pdf, f"-  {bullet}", indent=6)
+                _write_rich(pdf, bullet, indent=6)
             pdf.ln(1)
 
     if cv.education:
@@ -171,7 +188,7 @@ def cv_to_pdf(cv: Profile) -> bytes:
     if cv.additional_skills:
         heading("Additional Skills")
         for item in cv.additional_skills:
-            _write(pdf, f"-  {item}", indent=4)
+            _write_rich(pdf, item, indent=4)
 
     buffer = BytesIO()
     pdf.output(buffer)

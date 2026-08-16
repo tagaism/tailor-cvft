@@ -1,1 +1,1 @@
-"""Resumeer — local personal resume builder."""
+"""tailor-cvft — local personal resume builder."""
