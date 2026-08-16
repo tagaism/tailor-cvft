@@ -67,6 +67,16 @@ def sanitize_rich(value: str) -> str:
         return html.escape(re.sub(r"<[^>]+>", "", text), quote=False)
 
 
+def letter_html(value: str) -> str:
+    """Sanitize letter HTML and turn leftover newlines into breaks."""
+    text = "" if value is None else str(value)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    if "<" not in text:
+        paras = [part.strip() for part in re.split(r"\n\s*\n", text.strip()) if part.strip()]
+        return sanitize_rich("<br>".join(paras))
+    return sanitize_rich(text.replace("\n", "<br>"))
+
+
 def apply_cv_path(cv: dict[str, Any], path: str, value: str) -> None:
     if not re.fullmatch(r"[a-zA-Z0-9]+(?:\.[a-zA-Z0-9]+)*", path or ""):
         raise ValueError("Invalid path.")

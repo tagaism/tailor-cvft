@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.cv_layout import contact_bits, role_dates, skill_lines
-from app.richtext import sanitize_rich
+from app.richtext import letter_html, sanitize_rich
 from app.schemas import APPLICATION_STATUSES
 from app.services.llm import llm_health
 
@@ -13,6 +13,7 @@ templates.env.globals["cv_skill_lines"] = skill_lines
 templates.env.globals["cv_contact_bits"] = contact_bits
 templates.env.globals["cv_role_dates"] = role_dates
 templates.env.filters["rich"] = sanitize_rich
+templates.env.filters["letter_html"] = letter_html
 
 
 def template_context(request, **extra):
