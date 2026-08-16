@@ -122,6 +122,7 @@ def merge_profiles(current: Profile, incoming: Profile) -> Profile:
         contact=_merge_contact(current.contact, incoming.contact),
         summary=_prefer(current.summary, incoming.summary),
         skills=_union_preserve(current.skills, incoming.skills),
+        additional_skills=_union_preserve(current.additional_skills, incoming.additional_skills),
         experience=_merge_experience(current.experience, incoming.experience),
         education=_merge_education(current.education, incoming.education),
         projects=_merge_projects(current.projects, incoming.projects),

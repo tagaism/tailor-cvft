@@ -1,38 +1,89 @@
 {% extends "base.html" %}
-{% block title %}Job descriptions · Resumeer{% endblock %}
+{% block title %}Positions · Resumeer{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Job descriptions</h1>
-    <p class="lede">Save a posting, then build a tailored CV underneath it.</p>
+    <h1>Positions</h1>
+    <p class="lede">Companies and roles you are tracking. Build a tailored CV under each posting.</p>
   </div>
-  <a class="btn" href="/jobs/new">Add job</a>
+  <a class="btn" href="#add-job">Add position</a>
 </div>
 
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+<form id="add-job" class="panel" method="post" action="/jobs/new">
+  <h2>Add a job description</h2>
+  <p class="lede">Company name plus a job description is enough. A URL is optional — if LinkedIn blocks the fetch, keep the pasted description.</p>
+  <div class="grid-2">
+    <div>
+      <label for="company_name">Company name</label>
+      <input id="company_name" name="company_name" type="text" placeholder="Acme Corp" value="{{ company_name }}">
+    </div>
+    <div>
+      <label for="url">Job URL</label>
+      <input id="url" name="url" type="url" placeholder="https://company.com/careers/…" value="{{ url }}">
+    </div>
+  </div>
+
+  <label for="job_description">Job description</label>
+  <textarea id="job_description" name="job_description" class="tall" placeholder="Paste the full posting here.">{{ job_description }}</textarea>
+
+  <div class="grid-2">
+    <div>
+      <label for="required_skills">Required skills</label>
+      <textarea id="required_skills" name="required_skills" placeholder="One skill per line, or comma-separated">{{ required_skills }}</textarea>
+    </div>
+    <div>
+      <label for="desired_skills">Desired skills</label>
+      <textarea id="desired_skills" name="desired_skills" placeholder="One skill per line, or comma-separated">{{ desired_skills }}</textarea>
+    </div>
+  </div>
+
+  <label for="notes">Notes to emphasize</label>
+  <textarea id="notes" name="notes" placeholder="Must-haves, keywords, teams, or anything you want the tailored CV to lean on.">{{ notes }}</textarea>
+
+  <div class="btn-row" style="margin-top:1rem">
+    <button class="btn" type="submit">Save position</button>
+  </div>
+</form>
+
+<div class="filters">
+  <a class="chip {{ 'ok' if not status_filter else '' }}" href="/jobs">All</a>
+  {% for item in statuses %}
+  <a class="chip status-{{ item.value }} {{ 'ok' if status_filter == item.value else '' }}" href="/jobs?status={{ item.value }}">{{ item.label }}</a>
+  {% endfor %}
+</div>
 
 {% if jobs %}
 <div class="job-grid">
   {% for job in jobs %}
   <a class="card job-card" href="/jobs/{{ job.id }}">
-    <div>
+    <div class="chips">
+      <span class="badge status-{{ job.status }}">{{ job.status_label }}</span>
       <span class="badge {{ 'built' if job.latest_generation else '' }}">
-        {{ 'Built' if job.latest_generation else 'Not built' }}
+        {{ 'CV ready' if job.latest_generation else 'No CV' }}
       </span>
     </div>
     <h2>{{ job.title or 'Untitled role' }}</h2>
     <div class="meta">
-      {{ job.company or 'Unknown company' }}
+      {{ job.company_name or 'Unknown company' }}
+      {% if job.location %} · {{ job.location }}{% endif %}
       · {{ job.source_host }}
-      · {{ job.created_at.strftime('%Y-%m-%d') if job.created_at else '' }}
+      · {{ job.updated_at.strftime('%Y-%m-%d') if job.updated_at else '' }}
     </div>
+    {% if job.required_skill_list %}
+    <div class="chips">
+      {% for skill in job.required_skill_list[:6] %}
+      <span class="chip">{{ skill }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
   </a>
   {% endfor %}
 </div>
 {% else %}
 <div class="panel empty">
-  <p>No jobs yet. Add a careers-page URL or paste a LinkedIn posting.</p>
-  <p><a class="btn" href="/jobs/new">Add job</a></p>
+  <p>{% if status_filter %}No positions with that status.{% else %}No positions yet. Use the form above to add a URL or paste a posting.{% endif %}</p>
 </div>
 {% endif %}
 {% endblock %}

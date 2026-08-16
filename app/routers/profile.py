@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from app.deps import template_context, templates
 from app.forms import profile_from_form
@@ -39,20 +40,38 @@ async def save_profile_form(request: Request):
     return RedirectResponse("/profile?flash=saved", status_code=303)
 
 
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+
 @router.post("/profile/upload")
-async def upload_cv(file: UploadFile = File(...)):
-    if not file.filename:
-        return RedirectResponse("/profile?error=Choose+a+CV+file+first.", status_code=303)
-    data = await file.read()
-    if not data:
-        return RedirectResponse("/profile?error=That+file+was+empty.", status_code=303)
+async def upload_cv(request: Request):
     try:
-        raw = extract_text(file.filename, data)
+        form = await request.form(max_part_size=MAX_UPLOAD_BYTES)
+    except Exception:
+        return RedirectResponse(
+            "/profile?error=" + _q("Could not read that upload. Use a PDF, DOCX, or TXT under 20 MB."),
+            status_code=303,
+        )
+    upload = form.get("file")
+    if not isinstance(upload, (UploadFile, StarletteUploadFile)) or not upload.filename:
+        return RedirectResponse("/profile?error=" + _q("Choose a CV file first, then click Extract and merge."), status_code=303)
+    data = await upload.read()
+    if not data:
+        return RedirectResponse("/profile?error=" + _q("That file was empty."), status_code=303)
+    if len(data) > MAX_UPLOAD_BYTES:
+        return RedirectResponse("/profile?error=" + _q("That file is larger than 20 MB."), status_code=303)
+    try:
+        raw = extract_text(upload.filename, data)
         extracted, _model = await asyncio.to_thread(extract_profile_from_cv, raw)
     except ParseError as exc:
         return RedirectResponse(f"/profile?error={_q(str(exc))}", status_code=303)
     except LLMError as exc:
         return RedirectResponse(f"/profile?error={_q(str(exc))}", status_code=303)
+    except Exception as exc:
+        return RedirectResponse(
+            f"/profile?error={_q(f'Upload failed: {exc}')}",
+            status_code=303,
+        )
     merged = merge_profiles(load_profile(), extracted)
     save_profile(merged)
     return RedirectResponse("/profile?flash=imported", status_code=303)

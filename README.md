@@ -28,9 +28,14 @@ PDF export uses `fpdf2` (no extra system libraries). The on-screen preview is HT
 
 1. Open LM Studio and load a model.
 2. Developer tab → start the local server (default `http://127.0.0.1:1234`).
-3. Optional: set `LLM_MODEL` in `.env` to a specific model id. Leave it empty to use the first model LM Studio reports.
+3. Optional: set `LLM_MODEL` in `.env` to a specific model id. Leave it empty to use the first chat model LM Studio reports.
 
-The OpenAI-compatible base URL is `http://127.0.0.1:1234/v1`. `LLM_API_KEY` defaults to `lm-studio` (the SDK needs a string; LM Studio ignores it unless you set a token).
+The OpenAI-compatible base URL is `http://127.0.0.1:1234/v1`:
+
+- `GET /v1/models`
+- `POST /v1/chat/completions`
+
+`LLM_API_KEY` defaults to `lm-studio` (the SDK needs a string; LM Studio ignores it unless you set a token).
 
 ## Start the app
 
@@ -43,9 +48,12 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
 ## Layout
 
-- `/jobs` — job descriptions (home)
+- `/jobs` — positions (home), filterable by application status
 - `/jobs/new` — URL + notes + optional pasted JD
-- `/jobs/{id}` — source, **Build tailored pack**, then analysis / CV / letter
+- `/jobs/{id}` — company, status, source, **Build tailored pack**, then analysis / CV / letter
+- `/companies` — employers; created automatically when you save a position
 - `/profile` — editable profile + CV upload
 
-Data stays in `./data` (SQLite, `profile.json`, uploads). That folder is gitignored.
+Application statuses: Saved, Applied, Under consideration, Rejected (they rejected you), Declined (you rejected them).
+
+Data stays in `./data` (SQLite, `profile.json`, uploads). That folder is gitignored. Company and position types live in `app/schemas.py`; the same records are stored in SQLite (`companies`, `jobs`).

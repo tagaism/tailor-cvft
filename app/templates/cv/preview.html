@@ -9,37 +9,33 @@
 <body class="cv-page">
 {% endif %}
 <article class="cv">
-  <h1>{{ cv.contact.full_name or 'Your name' }}</h1>
-  <p class="contact-line">
-    {% set bits = [] %}
-    {% if cv.contact.email %}{% set _ = bits.append(cv.contact.email) %}{% endif %}
-    {% if cv.contact.phone %}{% set _ = bits.append(cv.contact.phone) %}{% endif %}
-    {% if cv.contact.location %}{% set _ = bits.append(cv.contact.location) %}{% endif %}
-    {{ bits | join(' · ') }}
-    {% if cv.contact.linkedin %} · <a href="{{ cv.contact.linkedin }}">{{ cv.contact.linkedin }}</a>{% endif %}
-    {% if cv.contact.github %} · <a href="{{ cv.contact.github }}">{{ cv.contact.github }}</a>{% endif %}
-    {% if cv.contact.website %} · <a href="{{ cv.contact.website }}">{{ cv.contact.website }}</a>{% endif %}
-  </p>
+  <header class="cv-header">
+    <h1>{{ cv.contact.full_name or 'Your name' }}</h1>
+    <p class="contact-line">{{ cv_contact_bits(cv) | join(' | ') }}</p>
+  </header>
 
-  {% if cv.summary %}
-  <h2>Summary</h2>
-  <p>{{ cv.summary }}</p>
-  {% endif %}
-
-  {% if cv.skills %}
-  <h2>Skills</h2>
-  <p class="skills">{{ cv.skills | join(' · ') }}</p>
+  {% set skills = cv_skill_lines(cv) %}
+  {% if skills %}
+  <h2>Technical Skills</h2>
+  <ul>
+    {% for line in skills %}<li>{{ line }}</li>{% endfor %}
+  </ul>
   {% endif %}
 
   {% if cv.experience %}
-  <h2>Experience</h2>
+  <h2>Professional Experience</h2>
   {% for role in cv.experience %}
   <div class="role">
-    <div class="role-top">
-      <div class="who">{{ role.title }}{% if role.company %} — {{ role.company }}{% endif %}</div>
-      <div class="when">{{ role.start }}{% if role.start or role.end %} – {% endif %}{{ role.end or ('Present' if role.current else '') }}</div>
+    <div class="role-head">
+      <div>
+        <div class="company">{{ role.company }}</div>
+        <div class="title">{{ role.title }}</div>
+      </div>
+      <div class="role-meta">
+        <div class="loc">{{ role.location }}</div>
+        <div class="dates">{{ cv_role_dates(role) }}</div>
+      </div>
     </div>
-    {% if role.location %}<div class="where">{{ role.location }}</div>{% endif %}
     {% if role.bullets %}
     <ul>
       {% for bullet in role.bullets %}<li>{{ bullet }}</li>{% endfor %}
@@ -52,12 +48,14 @@
   {% if cv.projects %}
   <h2>Projects</h2>
   {% for project in cv.projects %}
-  <div class="proj">
-    <div class="proj-top">
-      <div class="who">{{ project.name }}</div>
-      {% if project.url %}<div class="when">{{ project.url }}</div>{% endif %}
+  <div class="role">
+    <div class="role-head">
+      <div>
+        <div class="company">{{ project.name }}</div>
+        {% if project.description %}<div class="title">{{ project.description }}</div>{% endif %}
+      </div>
+      <div class="role-meta">{% if project.url %}<div class="dates">{{ project.url }}</div>{% endif %}</div>
     </div>
-    {% if project.description %}<p>{{ project.description }}</p>{% endif %}
     {% if project.bullets %}
     <ul>
       {% for bullet in project.bullets %}<li>{{ bullet }}</li>{% endfor %}
@@ -70,21 +68,35 @@
   {% if cv.education %}
   <h2>Education</h2>
   {% for edu in cv.education %}
-  <div class="edu">
-    <div class="edu-top">
-      <div class="who">{{ edu.degree }}{% if edu.field %} in {{ edu.field }}{% endif %}{% if edu.school %} — {{ edu.school }}{% endif %}</div>
-      <div class="when">{{ edu.start }}{% if edu.start or edu.end %} – {% endif %}{{ edu.end }}</div>
+  <div class="role">
+    <div class="role-head">
+      <div>
+        <div class="company">{{ edu.school }}</div>
+        <div class="title">{{ edu.degree }}{% if edu.field %} in {{ edu.field }}{% endif %}{% if edu.details %}, {{ edu.details }}{% endif %}</div>
+      </div>
+      <div class="role-meta">
+        <div class="loc">{{ edu.location if edu.location is defined else '' }}</div>
+        <div class="dates">{{ edu.end or edu.start }}</div>
+      </div>
     </div>
-    {% if edu.details %}<p>{{ edu.details }}</p>{% endif %}
   </div>
   {% endfor %}
   {% endif %}
 
   {% if cv.certifications %}
   <h2>Certifications</h2>
-  {% for cert in cv.certifications %}
-  <p>{{ cert.name }}{% if cert.issuer %} — {{ cert.issuer }}{% endif %}{% if cert.year %} ({{ cert.year }}){% endif %}</p>
-  {% endfor %}
+  <ul>
+    {% for cert in cv.certifications %}
+    <li>{{ cert.name }}{% if cert.issuer %} — {{ cert.issuer }}{% endif %}{% if cert.year %} ({{ cert.year }}){% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if cv.additional_skills %}
+  <h2>Additional Skills</h2>
+  <ul>
+    {% for item in cv.additional_skills %}<li>{{ item }}</li>{% endfor %}
+  </ul>
   {% endif %}
 </article>
 {% if standalone %}

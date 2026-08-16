@@ -23,7 +23,13 @@ PROFILE_SCHEMA_HINT = """
     "website": ""
   },
   "summary": "",
-  "skills": ["..."],
+  "skills": [
+    "Languages: ...",
+    "Databases: ...",
+    "Frameworks: ...",
+    "Technologies and Tools: ..."
+  ],
+  "additional_skills": ["Fluent in ..."],
   "experience": [
     {
       "title": "",
@@ -36,7 +42,7 @@ PROFILE_SCHEMA_HINT = """
     }
   ],
   "education": [
-    {"school": "", "degree": "", "field": "", "start": "", "end": "", "details": ""}
+    {"school": "", "degree": "", "field": "", "start": "", "end": "", "location": "", "details": ""}
   ],
   "projects": [
     {"name": "", "url": "", "description": "", "bullets": ["..."]}
@@ -52,11 +58,18 @@ class LLMError(Exception):
     pass
 
 
-def _client(timeout: float = 180.0, connect: float = 2.0) -> OpenAI:
+def openai_base_url() -> str:
+    raw = (settings.llm_base_url or "http://127.0.0.1:1234/v1").rstrip("/")
+    if not raw.endswith("/v1"):
+        raw = f"{raw}/v1"
+    return raw
+
+
+def _client(timeout: float | None = None, connect: float = 2.0) -> OpenAI:
     return OpenAI(
         api_key=settings.llm_api_key or "lm-studio",
-        base_url=settings.llm_base_url.rstrip("/"),
-        timeout=httpx.Timeout(timeout, connect=connect),
+        base_url=openai_base_url(),
+        timeout=httpx.Timeout(timeout if timeout is not None else settings.llm_timeout, connect=connect),
     )
 
 
@@ -69,18 +82,26 @@ def resolve_model(client: OpenAI | None = None) -> str:
     except Exception as exc:
         raise LLMError(_friendly_connection_error(exc)) from exc
     ids = [item.id for item in getattr(models, "data", []) if getattr(item, "id", None)]
-    if not ids:
+    chat_ids = [item for item in ids if "embed" not in item.lower()]
+    chosen = chat_ids or ids
+    if not chosen:
         raise LLMError(
             "LM Studio is running but no model is loaded. Load a model in LM Studio, then try again."
         )
-    return ids[0]
+    return chosen[0]
 
 
 def _friendly_connection_error(exc: Exception) -> str:
-    if isinstance(exc, (APIConnectionError, APITimeoutError)):
+    if isinstance(exc, APITimeoutError):
+        return (
+            f"LM Studio took longer than {int(settings.llm_timeout)}s. "
+            "Gemma often spends a minute reasoning before it writes JSON — "
+            "keep the tab open and try Build again. Raise LLM_TIMEOUT in .env if needed."
+        )
+    if isinstance(exc, APIConnectionError):
         return (
             "Cannot reach LM Studio at "
-            f"{settings.llm_base_url}. Start the local server (Developer tab, port 1234) "
+            f"{openai_base_url()}. Start the local server (Developer tab, port 1234) "
             "and load a model."
         )
     if isinstance(exc, APIStatusError):
@@ -89,22 +110,62 @@ def _friendly_connection_error(exc: Exception) -> str:
 
 
 _HEALTH_CACHE: tuple[float, dict[str, Any]] | None = None
-_HEALTH_TTL_SECONDS = 8.0
+_HEALTH_TTL_SECONDS = 20.0
 
 
 def llm_health() -> dict[str, Any]:
+    """Never block a page on LM Studio. Prefer a short HTTP probe over the SDK."""
     global _HEALTH_CACHE
     now = time.time()
     if _HEALTH_CACHE and now - _HEALTH_CACHE[0] < _HEALTH_TTL_SECONDS:
         return _HEALTH_CACHE[1]
+    if settings.llm_model.strip():
+        fallback = {
+            "ok": True,
+            "model": settings.llm_model.strip(),
+            "message": f"LM Studio · {settings.llm_model.strip()}",
+        }
+    else:
+        fallback = {
+            "ok": True,
+            "model": "",
+            "message": "LM Studio · local",
+        }
     try:
-        client = _client(timeout=2.0, connect=1.0)
-        model = resolve_model(client)
-        result = {"ok": True, "model": model, "message": f"LM Studio · {model}"}
-    except LLMError as exc:
-        result = {"ok": False, "model": "", "message": str(exc)}
-    except Exception as exc:
-        result = {"ok": False, "model": "", "message": _friendly_connection_error(exc)}
+        headers = {}
+        if settings.llm_api_key:
+            headers["Authorization"] = f"Bearer {settings.llm_api_key}"
+        response = httpx.get(
+            f"{openai_base_url()}/models",
+            headers=headers,
+            timeout=httpx.Timeout(0.8, connect=0.4),
+        )
+        response.raise_for_status()
+        payload = response.json()
+        ids = [
+            item.get("id")
+            for item in payload.get("data", [])
+            if isinstance(item, dict) and item.get("id")
+        ]
+        chat_ids = [item for item in ids if "embed" not in item.lower()]
+        model = settings.llm_model.strip() or (chat_ids[0] if chat_ids else (ids[0] if ids else ""))
+        if not model:
+            result = {
+                "ok": False,
+                "model": "",
+                "message": "LM Studio is running but no model is loaded",
+            }
+        else:
+            result = {"ok": True, "model": model, "message": f"LM Studio · {model}"}
+    except Exception:
+        result = _HEALTH_CACHE[1] if _HEALTH_CACHE else fallback
+        result = dict(result)
+        if not _HEALTH_CACHE:
+            result["ok"] = False
+            result["message"] = (
+                f"Cannot reach LM Studio at {openai_base_url()}. "
+                "Start the local server and load a model."
+            )
     _HEALTH_CACHE = (now, result)
     return result
 
@@ -114,19 +175,46 @@ def extract_json_object(text: str) -> dict[str, Any]:
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
-    try:
-        data = json.loads(cleaned)
+    for candidate in (cleaned, _close_truncated_json(cleaned)):
+        try:
+            data = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
         if isinstance(data, dict):
             return data
-    except json.JSONDecodeError:
-        pass
-    match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
-    if not match:
-        raise LLMError("The model did not return JSON. Try again, or use a stronger local model.")
-    data = json.loads(match.group(0))
-    if not isinstance(data, dict):
-        raise LLMError("The model returned JSON that was not an object.")
-    return data
+    raise LLMError("The model did not return complete JSON. Try building again.")
+
+
+def _close_truncated_json(text: str) -> str:
+    start = text.find("{")
+    if start < 0:
+        return text
+    chunk = text[start:]
+    stack: list[str] = []
+    in_string = False
+    escape = False
+    for char in chunk:
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            stack.append("}")
+        elif char == "[":
+            stack.append("]")
+        elif char in "}]" and stack and stack[-1] == char:
+            stack.pop()
+    if in_string:
+        chunk += '"'
+    while stack:
+        chunk += stack.pop()
+    return chunk
 
 
 def complete_json(system: str, user: str) -> tuple[dict[str, Any], str]:
@@ -150,6 +238,7 @@ def complete_json(system: str, user: str) -> tuple[dict[str, Any], str]:
                 model=model,
                 messages=messages,
                 temperature=0.3,
+                max_tokens=8192,
             )
         except LLMError:
             raise
@@ -184,22 +273,35 @@ def extract_profile_from_cv(raw_text: str) -> tuple[Profile, str]:
         raise LLMError(f"Could not read a profile from the model JSON: {exc}") from exc
 
 
-def tailor_pack(profile: Profile, job_text: str, notes: str, title: str, company: str) -> tuple[TailorPack, str]:
+def tailor_pack(
+    profile: Profile,
+    job_text: str,
+    notes: str,
+    title: str,
+    company: str,
+    required_skills: list[str] | None = None,
+    desired_skills: list[str] | None = None,
+) -> tuple[TailorPack, str]:
     system = (
         "You are a precise resume tailor. You rewrite a candidate's existing profile for one job.\n"
         "HARD RULES:\n"
         "- Use only facts present in the profile. Never invent employers, titles, dates, degrees, metrics, tools, or skills.\n"
         "- You MAY rephrase bullets, reorder, drop irrelevant items, and use the job's wording when it honestly describes existing work.\n"
-        "- Skills on the tailored CV must be a subset of the profile skills, or obvious synonyms already supported by the profile (JS → JavaScript).\n"
-        "- One-page friendly: summary ≤ 4 sentences; 3–6 bullets per recent role; fewer for older roles.\n"
-        "- Cover letter: 250–350 words, specific to this job, no fake claims, plain text paragraphs.\n"
-        "- Match analysis must be honest. List real gaps. Do not flatter.\n"
-        "Return ONLY a JSON object with keys cv, cover_letter, match."
+        "- Skills MUST be four labeled lines only (omit a line if empty), using only skills from the profile:\n"
+        "  Languages: ...\n  Databases: ...\n  Frameworks: ...\n  Technologies and Tools: ...\n"
+        "- additional_skills: spoken languages or extras already in the profile. Use [] if none.\n"
+        "- Keep summary to at most 2 sentences in JSON (the rendered CV template does not show it).\n"
+        "- One-page friendly: 3–6 bullets per recent role; fewer for older roles.\n"
+        "- Cover letter: 180–250 words, specific to this job, no fake claims, plain text paragraphs.\n"
+        "- Match analysis must be honest and SHORT: at most 6 items per list, short phrases only.\n"
+        "- Return one complete JSON object with keys cv, cover_letter, match. No markdown fences. Do not stop mid-string."
     )
     user = {
         "job_title": title,
         "company": company,
         "job_description": job_text[:18000],
+        "required_skills": required_skills or [],
+        "desired_skills": desired_skills or [],
         "candidate_notes": notes,
         "profile": profile.model_dump(),
         "output_schema": {

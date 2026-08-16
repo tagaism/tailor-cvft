@@ -11,7 +11,8 @@
   <header class="site-header">
     <a class="brand" href="/jobs">Resum<span>eer</span></a>
     <nav>
-      <a href="/jobs" class="{{ 'active' if active == 'jobs' else '' }}">Job descriptions</a>
+      <a href="/jobs" class="{{ 'active' if active == 'jobs' else '' }}">Positions</a>
+      <a href="/companies" class="{{ 'active' if active == 'companies' else '' }}">Companies</a>
       <a href="/profile" class="{{ 'active' if active == 'profile' else '' }}">Profile</a>
     </nav>
     <div class="llm-pill {{ 'ok' if llm.ok else 'bad' }}" title="{{ llm.message }}">{{ llm.message }}</div>

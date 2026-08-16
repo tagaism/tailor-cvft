@@ -153,7 +153,21 @@ nav a.active, nav a:hover { color: var(--ink); }
 .badge.built { background: var(--ok-soft); color: var(--ok); }
 
 label { display: block; font-size: 0.82rem; color: var(--muted); margin: 0.7rem 0 0.3rem; }
-input[type="text"], input[type="email"], input[type="url"], input[type="file"], textarea {
+.filters { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 1.2rem; }
+.filters .chip { text-decoration: none; color: inherit; border: 1px solid transparent; }
+.filters .chip.ok { border-color: #d9f99d; }
+
+.badge.status-saved { background: var(--chip); color: var(--muted); }
+.badge.status-applied { background: #dbeafe; color: #1e40af; }
+.badge.status-under_consideration { background: var(--warn-soft); color: var(--warn); }
+.badge.status-rejected { background: var(--err-soft); color: var(--err); }
+.badge.status-declined { background: #e7e5e4; color: #44403c; }
+.chip.status-applied { background: #dbeafe; color: #1e40af; }
+.chip.status-under_consideration { background: var(--warn-soft); color: var(--warn); }
+.chip.status-rejected { background: var(--err-soft); color: var(--err); }
+.chip.status-declined { background: #e7e5e4; color: #44403c; }
+
+input[type="text"], input[type="email"], input[type="url"], input[type="file"], select, textarea {
   width: 100%;
   font: inherit;
   color: var(--ink);
@@ -193,7 +207,7 @@ textarea.tall { min-height: 14rem; }
   border-radius: 12px;
   padding: 1.5rem 1.6rem;
 }
-.results { scroll-margin-top: 5rem; }
+.results, #add-job { scroll-margin-top: 5rem; }
 .empty {
   padding: 3rem 1rem;
   text-align: center;

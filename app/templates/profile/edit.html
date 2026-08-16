@@ -14,13 +14,15 @@
 
 <section class="panel">
   <h2>Upload a CV to seed this profile</h2>
-  <form method="post" action="/profile/upload" enctype="multipart/form-data">
+  <form id="upload-form" method="post" action="/profile/upload" enctype="multipart/form-data">
     <label for="file">PDF, DOCX, or TXT</label>
-    <input id="file" name="file" type="file" accept=".pdf,.docx,.txt,.md">
+    <input id="file" name="file" type="file" accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" required>
+    <p id="file-name" class="meta"></p>
     <div class="btn-row" style="margin-top:0.8rem">
       <button class="btn secondary" type="submit">Extract and merge</button>
+      <span class="busy">Reading the CV and asking LM Studio to structure it. This can take a minute…</span>
     </div>
-    <p class="meta">Empty fields are filled; existing jobs are matched by company + title and their bullets are unioned.</p>
+    <p class="meta">Choose a file, then click Extract and merge. Empty fields are filled; existing roles are matched by company + title.</p>
   </form>
 </section>
 
@@ -126,6 +128,27 @@
 {% endblock %}
 {% block scripts %}
 <script>
+  const uploadForm = document.getElementById("upload-form");
+  const fileInput = document.getElementById("file");
+  const fileName = document.getElementById("file-name");
+  if (fileInput && fileName) {
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files && fileInput.files[0];
+      fileName.textContent = file ? `Selected: ${file.name}` : "";
+    });
+  }
+  if (uploadForm) {
+    uploadForm.addEventListener("submit", (event) => {
+      if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        event.preventDefault();
+        fileName.textContent = "Choose a CV file first.";
+        return;
+      }
+      uploadForm.classList.add("is-busy");
+      const button = uploadForm.querySelector("button[type='submit']");
+      if (button) button.disabled = true;
+    });
+  }
   document.querySelectorAll("[data-add]").forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.getAttribute("data-add");

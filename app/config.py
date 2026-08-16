@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     llm_base_url: str = "http://127.0.0.1:1234/v1"
     llm_api_key: str = "lm-studio"
     llm_model: str = ""
+    llm_timeout: float = 600.0
     data_dir: Path = ROOT_DIR / "data"
 
     @property

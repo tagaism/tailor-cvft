@@ -4,15 +4,13 @@ from io import BytesIO
 
 from fpdf import FPDF
 
+from app.cv_layout import contact_bits, role_dates, skill_lines
 from app.schemas import Profile
 
 
 class ResumePDF(FPDF):
     def footer(self) -> None:
-        self.set_y(-12)
-        self.set_font("Helvetica", "", 8)
-        self.set_text_color(120, 113, 108)
-        self.cell(0, 8, str(self.page_no()), align="C")
+        return
 
 
 def html_to_pdf(
@@ -23,7 +21,6 @@ def html_to_pdf(
     job_title: str = "",
     company: str = "",
 ) -> bytes:
-    # html is kept so preview and PDF stay on the same route contract.
     if letter:
         return letter_to_pdf(cv or Profile(), letter, job_title, company)
     if cv is None:
@@ -32,119 +29,145 @@ def html_to_pdf(
 
 
 def _safe(text: str) -> str:
-    return (text or "").encode("latin-1", "replace").decode("latin-1")
+    cleaned = text or ""
+    for src, dst in {
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u2022": "-",
+        "\u00b7": "-",
+        "\u00a0": " ",
+    }.items():
+        cleaned = cleaned.replace(src, dst)
+    return cleaned.encode("latin-1", "replace").decode("latin-1")
 
 
 def _usable_width(pdf: FPDF) -> float:
     return pdf.w - pdf.l_margin - pdf.r_margin
 
 
-def _row(pdf: FPDF, left: str, right: str, *, bold_left: bool = True) -> None:
+def _write(
+    pdf: FPDF,
+    text: str,
+    *,
+    width: float | None = None,
+    height: float = 5,
+    font: str = "Times",
+    style: str = "",
+    size: float = 11,
+    align: str = "L",
+    indent: float = 0,
+) -> None:
+    pdf.set_font(font, style, size)
+    pdf.set_x(pdf.l_margin + indent)
+    usable = _usable_width(pdf) - indent
+    line_width = usable if width is None else width
+    pdf.multi_cell(
+        line_width,
+        height,
+        _safe(text),
+        align=align,
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
+
+
+def _split_row(pdf: FPDF, left_top: str, left_bottom: str, right_top: str, right_bottom: str) -> None:
     epw = _usable_width(pdf)
-    left_w = epw * 0.68
+    left_w = epw * 0.64
     right_w = epw - left_w
-    y = pdf.get_y()
-    pdf.set_xy(pdf.l_margin, y)
-    pdf.set_font("Helvetica", "B" if bold_left else "", 10)
-    pdf.set_text_color(28, 25, 23)
-    pdf.multi_cell(left_w, 5, _safe(left), new_x="RIGHT", new_y="TOP")
-    left_bottom = pdf.get_y()
-    pdf.set_xy(pdf.l_margin + left_w, y)
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_text_color(87, 83, 78)
-    pdf.multi_cell(right_w, 5, _safe(right), align="R")
-    pdf.set_y(max(left_bottom, pdf.get_y()))
+    x0 = pdf.l_margin
+    y0 = pdf.get_y()
+
+    pdf.set_xy(x0, y0)
+    pdf.set_font("Times", "B", 11)
+    pdf.multi_cell(left_w, 5, _safe((left_top or "").upper()), new_x="LMARGIN", new_y="NEXT")
+    y_company = pdf.get_y()
+    pdf.set_xy(x0, y_company)
+    pdf.set_font("Times", "", 11)
+    pdf.multi_cell(left_w, 5, _safe(left_bottom or ""), new_x="LMARGIN", new_y="NEXT")
+    y_left = pdf.get_y()
+
+    pdf.set_xy(x0 + left_w, y0)
+    pdf.set_font("Times", "B", 11)
+    pdf.multi_cell(right_w, 5, _safe(right_top or ""), align="R", new_x="LMARGIN", new_y="NEXT")
+    y_loc = pdf.get_y()
+    pdf.set_xy(x0 + left_w, y_loc)
+    pdf.set_font("Times", "I", 11)
+    pdf.multi_cell(right_w, 5, _safe(right_bottom or ""), align="R", new_x="LMARGIN", new_y="NEXT")
+    y_right = pdf.get_y()
+
+    pdf.set_xy(x0, max(y_left, y_right) + 0.4)
 
 
 def cv_to_pdf(cv: Profile) -> bytes:
-    pdf = ResumePDF(format="A4")
-    pdf.set_margins(16, 16, 16)
-    pdf.set_auto_page_break(auto=True, margin=16)
+    pdf = ResumePDF(format="Letter")
+    pdf.set_margins(18, 16, 18)
+    pdf.set_auto_page_break(auto=True, margin=14)
     pdf.add_page()
-    epw = pdf.w - pdf.l_margin - pdf.r_margin
+    epw = _usable_width(pdf)
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_draw_color(0, 0, 0)
+    pdf.set_line_width(0.35)
 
-    contact = cv.contact
-    pdf.set_font("Helvetica", "B", 20)
-    pdf.set_text_color(28, 25, 23)
-    pdf.multi_cell(epw, 9, _safe(contact.full_name or "Resume"))
-
-    bits = [contact.email, contact.phone, contact.location, contact.linkedin, contact.github, contact.website]
-    line = "  |  ".join(bit for bit in bits if bit)
-    if line:
-        pdf.set_font("Helvetica", "", 9)
-        pdf.set_text_color(68, 64, 60)
-        pdf.multi_cell(epw, 5, _safe(line))
-    pdf.ln(2)
+    _write(pdf, cv.contact.full_name or "Resume", height=8, style="B", size=20, align="C")
+    y = pdf.get_y()
+    pdf.line(pdf.l_margin, y + 0.6, pdf.l_margin + epw, y + 0.6)
+    pdf.set_y(y + 2.2)
+    bits = contact_bits(cv)
+    if bits:
+        _write(pdf, " | ".join(bits), height=5, size=10, align="C")
 
     def heading(title: str) -> None:
-        pdf.ln(2)
-        pdf.set_font("Helvetica", "B", 10)
-        pdf.set_text_color(28, 25, 23)
-        pdf.cell(epw, 6, title.upper(), new_x="LMARGIN", new_y="NEXT")
-        y = pdf.get_y()
-        pdf.set_draw_color(28, 25, 23)
-        pdf.line(pdf.l_margin, y, pdf.l_margin + epw, y)
-        pdf.ln(2)
+        pdf.ln(2.2)
+        _write(pdf, title.upper(), height=6, style="B", size=12)
+        y_line = pdf.get_y()
+        pdf.line(pdf.l_margin, y_line, pdf.l_margin + epw, y_line)
+        pdf.set_y(y_line + 1.6)
 
-    if cv.summary:
-        heading("Summary")
-        pdf.set_font("Helvetica", "", 10)
-        pdf.set_text_color(28, 25, 23)
-        pdf.multi_cell(epw, 5, _safe(cv.summary))
-
-    if cv.skills:
-        heading("Skills")
-        pdf.set_font("Helvetica", "", 10)
-        pdf.set_text_color(28, 25, 23)
-        pdf.multi_cell(epw, 5, _safe("  |  ".join(cv.skills)))
+    lines = skill_lines(cv)
+    if lines:
+        heading("Technical Skills")
+        for line in lines:
+            _write(pdf, f"-  {line}", indent=4)
 
     if cv.experience:
-        heading("Experience")
+        heading("Professional Experience")
         for role in cv.experience:
-            left = " - ".join(part for part in [role.title, role.company] if part)
-            when = " - ".join(part for part in [role.start, role.end or ("Present" if role.current else "")] if part)
-            _row(pdf, left, when)
-            if role.location:
-                pdf.set_font("Helvetica", "", 9)
-                pdf.set_text_color(68, 64, 60)
-                pdf.multi_cell(epw, 4, _safe(role.location))
-            pdf.set_text_color(28, 25, 23)
-            pdf.set_font("Helvetica", "", 10)
+            _split_row(pdf, role.company, role.title, role.location, role_dates(role))
             for bullet in role.bullets:
-                pdf.multi_cell(epw, 5, _safe(f"-  {bullet}"))
-            pdf.ln(1)
+                _write(pdf, f"-  {bullet}", indent=6)
+            pdf.ln(1.4)
 
     if cv.projects:
         heading("Projects")
         for project in cv.projects:
-            _row(pdf, project.name, project.url)
-            pdf.set_font("Helvetica", "", 10)
-            pdf.set_text_color(28, 25, 23)
-            if project.description:
-                pdf.multi_cell(epw, 5, _safe(project.description))
+            _split_row(pdf, project.name, project.description, "", project.url)
             for bullet in project.bullets:
-                pdf.multi_cell(epw, 5, _safe(f"-  {bullet}"))
+                _write(pdf, f"-  {bullet}", indent=6)
             pdf.ln(1)
 
     if cv.education:
         heading("Education")
         for edu in cv.education:
             degree = " in ".join(part for part in [edu.degree, edu.field] if part)
-            line = " - ".join(part for part in [degree, edu.school] if part)
-            when = " - ".join(part for part in [edu.start, edu.end] if part)
-            _row(pdf, line, when)
             if edu.details:
-                pdf.set_font("Helvetica", "", 10)
-                pdf.set_text_color(28, 25, 23)
-                pdf.multi_cell(epw, 5, _safe(edu.details))
+                degree = f"{degree}, {edu.details}" if degree else edu.details
+            _split_row(pdf, edu.school, degree, edu.location, edu.end or edu.start)
 
     if cv.certifications:
         heading("Certifications")
-        pdf.set_font("Helvetica", "", 10)
-        pdf.set_text_color(28, 25, 23)
         for cert in cv.certifications:
             parts = [cert.name, cert.issuer, f"({cert.year})" if cert.year else ""]
-            pdf.multi_cell(epw, 5, _safe(" - ".join(part for part in parts if part)))
+            _write(pdf, " - ".join(part for part in parts if part))
+
+    if cv.additional_skills:
+        heading("Additional Skills")
+        for item in cv.additional_skills:
+            _write(pdf, f"-  {item}", indent=4)
 
     buffer = BytesIO()
     pdf.output(buffer)
@@ -152,29 +175,22 @@ def cv_to_pdf(cv: Profile) -> bytes:
 
 
 def letter_to_pdf(cv: Profile, letter: str, job_title: str = "", company: str = "") -> bytes:
-    pdf = ResumePDF(format="A4")
+    pdf = ResumePDF(format="Letter")
     pdf.set_margins(20, 20, 20)
     pdf.set_auto_page_break(auto=True, margin=18)
     pdf.add_page()
-    epw = pdf.w - pdf.l_margin - pdf.r_margin
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.set_text_color(28, 25, 23)
-    pdf.multi_cell(epw, 7, _safe(cv.contact.full_name or ""))
+    _write(pdf, cv.contact.full_name or "", height=7, style="B", size=14)
     bits = [cv.contact.email, cv.contact.phone, cv.contact.location]
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_text_color(68, 64, 60)
-    pdf.multi_cell(epw, 5, _safe("  |  ".join(bit for bit in bits if bit)))
+    _write(pdf, " | ".join(bit for bit in bits if bit), height=5, size=10)
     if job_title or company:
-        pdf.multi_cell(epw, 5, _safe(" | ".join(part for part in [job_title, company] if part)))
+        _write(pdf, " | ".join(part for part in [job_title, company] if part), height=5, size=10)
     pdf.ln(6)
-    pdf.set_font("Helvetica", "", 11)
-    pdf.set_text_color(28, 25, 23)
     for para in (letter or "").split("\n\n"):
         text = para.strip()
         if not text:
             continue
-        pdf.multi_cell(epw, 6, _safe(text))
-        pdf.ln(3)
+        _write(pdf, text, height=6)
+        pdf.ln(2.5)
     buffer = BytesIO()
     pdf.output(buffer)
     return buffer.getvalue()

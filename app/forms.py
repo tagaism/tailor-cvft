@@ -13,6 +13,20 @@ def _lines(value: str) -> list[str]:
     return [line.strip() for line in value.splitlines() if line.strip()]
 
 
+def parse_skill_text(value: str) -> str:
+    """Normalize a skills textarea to one unique skill per line."""
+    seen = set()
+    out: list[str] = []
+    for chunk in (value or "").replace(",", "\n").splitlines():
+        skill = chunk.strip()
+        key = skill.lower()
+        if not skill or key in seen:
+            continue
+        seen.add(key)
+        out.append(skill)
+    return "\n".join(out)
+
+
 def profile_from_form(form: FormData) -> Profile:
     titles = _getlist(form, "exp_title")
     companies = _getlist(form, "exp_company")

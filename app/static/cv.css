@@ -1,71 +1,85 @@
 .cv {
-  color: #1c1917;
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-size: 10.5pt;
-  line-height: 1.35;
+  color: #000;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 11pt;
+  line-height: 1.28;
   max-width: 740px;
   margin: 0 auto;
 }
+.cv-header {
+  text-align: center;
+  margin: 0 0 0.55rem;
+}
 .cv h1 {
-  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  font-size: 26pt;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-  margin: 0 0 0.2rem;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 22pt;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin: 0 0 0.15rem;
+  padding-bottom: 0.2rem;
+  border-bottom: 1.4px solid #000;
 }
 .cv .contact-line {
-  color: #44403c;
-  font-size: 9.5pt;
-  margin: 0 0 0.9rem;
+  color: #000;
+  font-size: 10.5pt;
+  margin: 0.28rem 0 0;
 }
 .cv .contact-line a { color: inherit; text-decoration: none; }
 .cv h2 {
-  font-size: 10pt;
-  letter-spacing: 0.12em;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 12pt;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
-  border-bottom: 1px solid #1c1917;
-  margin: 0.9rem 0 0.4rem;
-  padding-bottom: 0.15rem;
+  border-bottom: 1.4px solid #000;
+  margin: 0.7rem 0 0.28rem;
+  padding-bottom: 0.08rem;
 }
-.cv p { margin: 0 0 0.45rem; }
-.cv .role, .cv .edu, .cv .proj { margin: 0 0 0.65rem; }
-.cv .role-top, .cv .edu-top, .cv .proj-top {
+.cv p { margin: 0 0 0.3rem; }
+.cv .role { margin: 0 0 0.55rem; }
+.cv .role-head {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
+  align-items: flex-start;
 }
-.cv .who { font-weight: 600; }
-.cv .when { color: #57534e; white-space: nowrap; }
-.cv .where { color: #44403c; font-size: 9.5pt; }
-.cv ul { margin: 0.2rem 0 0; padding-left: 1.1rem; }
+.cv .company {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 11pt;
+}
+.cv .title { font-weight: 400; }
+.cv .role-meta { text-align: right; white-space: nowrap; }
+.cv .loc { font-weight: 700; }
+.cv .dates { font-style: italic; }
+.cv ul { margin: 0.15rem 0 0; padding-left: 1.25rem; }
 .cv li { margin: 0.08rem 0; }
-.cv .skills { margin: 0; }
 
 .letter {
   max-width: 680px;
   margin: 0 auto;
-  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  font-family: "Times New Roman", Times, serif;
   font-size: 12pt;
   line-height: 1.5;
-  color: #1c1917;
+  color: #000;
 }
 .letter .sender { margin-bottom: 1.4rem; }
 .letter h1 { font-size: 16pt; margin: 0 0 0.2rem; }
-.letter .meta { color: #57534e; font-size: 10.5pt; margin: 0; }
+.letter .meta { color: #333; font-size: 10.5pt; margin: 0; }
 .letter .body p { margin: 0 0 0.85rem; white-space: pre-wrap; }
 
-@page { size: A4; margin: 16mm 16mm 16mm 16mm; }
+@page { size: letter; margin: 0.65in 0.7in 0.65in 0.7in; }
 
 body.cv-page {
   margin: 0;
   background: #fff;
-  padding: 16mm;
+  padding: 0.65in 0.7in;
 }
 @media screen {
   body.cv-page { background: #f3efe6; }
   body.cv-page .cv, body.cv-page .letter {
     background: #fff;
-    padding: 16mm;
+    padding: 0.65in 0.7in;
     box-shadow: 0 10px 40px rgba(0,0,0,0.06);
   }
 }
