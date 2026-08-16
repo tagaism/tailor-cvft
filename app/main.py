@@ -15,7 +15,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Resumeer", lifespan=lifespan)
+app = FastAPI(title="tailor-cvft", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(settings.static_dir)), name="static")
 app.include_router(jobs.router)
 app.include_router(companies.router)

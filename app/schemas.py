@@ -17,6 +17,14 @@ class Contact(BaseModel):
     website: str = ""
 
 
+def _string_list(value):
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    return [str(item) for item in value if item is not None]
+
+
 class Experience(BaseModel):
     title: str = ""
     company: str = ""
@@ -32,6 +40,11 @@ class Experience(BaseModel):
         if isinstance(value, str):
             return value.strip().lower() in {"1", "true", "yes", "y"}
         return bool(value)
+
+    @field_validator("bullets", mode="before")
+    @classmethod
+    def _bullets(cls, value):
+        return _string_list(value)
 
 
 class Education(BaseModel):
@@ -50,6 +63,11 @@ class Project(BaseModel):
     description: str = ""
     bullets: list[str] = Field(default_factory=list)
 
+    @field_validator("bullets", mode="before")
+    @classmethod
+    def _bullets(cls, value):
+        return _string_list(value)
+
 
 class Certification(BaseModel):
     name: str = ""
@@ -67,6 +85,11 @@ class Profile(BaseModel):
     projects: list[Project] = Field(default_factory=list)
     certifications: list[Certification] = Field(default_factory=list)
 
+    @field_validator("skills", "additional_skills", mode="before")
+    @classmethod
+    def _skill_lists(cls, value):
+        return _string_list(value)
+
     def is_ready(self) -> bool:
         has_name = bool(self.contact.full_name.strip())
         has_substance = bool(
@@ -80,7 +103,7 @@ class Profile(BaseModel):
 
 
 class KeywordCoverage(BaseModel):
-    keyword: str
+    keyword: str = ""
     present: bool = False
 
     @field_validator("present", mode="before")
@@ -98,6 +121,31 @@ class MatchAnalysis(BaseModel):
     emphasis: list[str] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
     talking_points: list[str] = Field(default_factory=list)
+
+    @field_validator(
+        "matched_skills",
+        "missing_skills",
+        "emphasis",
+        "gaps",
+        "talking_points",
+        mode="before",
+    )
+    @classmethod
+    def _lists(cls, value):
+        return _string_list(value)
+
+    @field_validator("keyword_coverage", mode="before")
+    @classmethod
+    def _coverage(cls, value):
+        if not value:
+            return []
+        out = []
+        for item in value:
+            if isinstance(item, str):
+                out.append({"keyword": item, "present": False})
+            elif isinstance(item, dict):
+                out.append(item)
+        return out
 
 
 class TailorPack(BaseModel):

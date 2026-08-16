@@ -1,4 +1,4 @@
-# Resum<span>eer</span>
+# tailor-cvft
 
 <p align="center">
   <strong>A local resume studio.</strong><br>
@@ -16,7 +16,7 @@
 
 ---
 
-Resumeer is a single-user web app for people who apply often and refuse to hand their CV to a cloud model.
+**tailor-cvft** is a single-user web app for people who apply often and refuse to hand their CV to a cloud model.
 
 You keep **one source-of-truth profile**. Under each **job description** you generate a tailored pack: Times-style CV, cover letter, and an honest match report. Companies and application status live next to the posting — Saved → Applied → Under consideration → Rejected / Declined.
 
@@ -36,7 +36,7 @@ The LLM is [LM Studio](https://lmstudio.ai) on your machine. Facts may be rephra
 
 ## Why this shape
 
-| You want | Resumeer does |
+| You want | tailor-cvft does |
 | --- | --- |
 | One profile, many applications | Upload a CV once, edit it, reuse it |
 | A CV that reads like *that* job | Build a pack under the position, not a generic rewrite |
@@ -81,7 +81,7 @@ docker compose up --build
 | Piece | Role |
 | --- | --- |
 | `Dockerfile` | Python 3.12 slim, installs `requirements.txt`, serves with uvicorn |
-| `docker-compose.yml` | Maps `8000:8000`, mounts `./data` → `/data` |
+| `docker-compose.yml` | Maps `8000:8000`, mounts `./data` → `/data` and `./app` → `/app/app` |
 | `.dockerignore` | Keeps `.venv`, `.git`, `data/`, `.env` out of the image |
 
 Compose **overrides** two values so the container works:
@@ -132,7 +132,8 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000). Here `LLM_BASE_URL` stays `
 2. **Positions** — add the job.
 3. Open the role → **Build tailored pack**.
 4. Leave the tab open. Local models often take **3–10 minutes**.
-5. Preview on the page, then download the CV / letter PDFs.
+5. Preview on the page. Click any CV bullet to edit; **B** / **I** for bold and italic; click outside to save.
+6. Download the CV / letter PDFs.
 
 ## LM Studio
 
@@ -151,7 +152,9 @@ OpenAI-compatible calls:
 - `GET /v1/models`
 - `POST /v1/chat/completions`
 
-Use the app at **:8000**. Opening **:1234** in a browser is the model server, not Resumeer.
+Use the app at **:8000**. Opening **:1234** in a browser is the model server, not tailor-cvft.
+
+On the tailored CV, click a bullet to edit. **B** / **I** (or Ctrl/Cmd+B and Ctrl/Cmd+I) apply bold and italic. Click outside the bullet to save. Downloads pick up those edits.
 
 ## How tailoring is constrained
 
@@ -193,7 +196,7 @@ Everything stays in `./data` on your disk (bind-mounted when you use Compose).
 
 | File | What |
 | --- | --- |
-| `resumeer.db` | companies, positions, generations |
+| `resumeer.db` | companies, positions, generations (existing filename) |
 | `profile.json` | your source CV |
 | `uploads/` | files you imported |
 

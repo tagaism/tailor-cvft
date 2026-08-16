@@ -1,7 +1,7 @@
 services:
   web:
     build: .
-    image: resumeer:local
+    image: tailor-cvft:local
     ports:
       - "8000:8000"
     env_file:
@@ -12,6 +12,7 @@ services:
       LLM_BASE_URL: http://host.docker.internal:1234/v1
     volumes:
       - ./data:/data
+      - ./app:/app/app
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

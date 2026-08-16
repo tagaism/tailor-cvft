@@ -59,6 +59,38 @@
 .cv .dates { font-style: italic; }
 .cv ul { margin: 0.15rem 0 0; padding-left: 1.25rem; }
 .cv li { margin: 0.08rem 0; }
+.cv-bullet { cursor: text; border-radius: 2px; outline: none; }
+.cv-bullet:hover { background: rgba(154, 52, 18, 0.06); }
+.cv-bullet.is-editing {
+  background: #fff8ef;
+  box-shadow: 0 0 0 1px #d6c7b2;
+  padding: 0.05rem 0.15rem;
+}
+.cv-bullet.is-saved { background: #ecfccb; }
+.cv-bullet.is-error { background: #ffe4e6; }
+.cv-fmt {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  background: #1c1917;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+}
+.cv-fmt[hidden] { display: none; }
+.cv-fmt button {
+  min-width: 1.7rem;
+  height: 1.7rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #fffdf8;
+  font: italic 13px "Times New Roman", Times, serif;
+  cursor: pointer;
+}
+.cv-fmt button[data-cmd="bold"] { font-style: normal; font-weight: 700; }
+.cv-fmt button.on, .cv-fmt button:hover { background: #44403c; }
 
 .letter {
   max-width: 680px;

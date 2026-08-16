@@ -1,19 +1,23 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.db import get_db
 from app.deps import template_context, templates
 from app.models import Generation, Job
 from app.profile_store import load_profile
 from app.forms import parse_skill_text
+from app.richtext import apply_cv_path, sanitize_rich
 from app.schemas import ApplicationStatus, MatchAnalysis, Profile
 from app.services.companies import apply_status, link_job_company
 from app.services.llm import LLMError, tailor_pack
@@ -108,8 +112,8 @@ async def job_detail(request: Request, job_id: int, db: Session = Depends(get_db
     if job is None:
         return RedirectResponse("/jobs?error=Job+not+found.", status_code=303)
     generation = job.latest_generation
-    cv = Profile.model_validate(generation.cv_json) if generation else None
-    match = MatchAnalysis.model_validate(generation.match_json) if generation else None
+    cv = _safe_validate(Profile, generation.cv_json) if generation else None
+    match = _safe_validate(MatchAnalysis, generation.match_json) if generation else None
     return templates.TemplateResponse(
         request,
         "jobs/detail.html",
@@ -239,6 +243,41 @@ async def build_job(job_id: int, db: Session = Depends(get_db)):
     job.updated_at = datetime.now(timezone.utc)
     db.commit()
     return RedirectResponse(f"/jobs/{job.id}?flash=built#results", status_code=303)
+
+
+def _safe_validate(model_cls, data):
+    try:
+        return model_cls.model_validate(data or {})
+    except Exception:
+        return model_cls()
+
+
+class BulletEdit(BaseModel):
+    path: str = Field(min_length=1, max_length=200)
+    html: str = Field(default="", max_length=8000)
+
+
+@router.post("/jobs/{job_id}/cv-bullet")
+async def save_cv_bullet(job_id: int, payload: BulletEdit, db: Session = Depends(get_db)):
+    job = db.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    generation = job.latest_generation
+    if generation is None:
+        raise HTTPException(status_code=400, detail="Build a CV first.")
+    cleaned = sanitize_rich(payload.html)
+    cv = copy.deepcopy(generation.cv_json or {})
+    try:
+        apply_cv_path(cv, payload.path, cleaned)
+        Profile.model_validate(cv)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not save that bullet: {exc}") from exc
+    generation.cv_json = cv
+    flag_modified(generation, "cv_json")
+    job.updated_at = datetime.now(timezone.utc)
+    db.add(generation)
+    db.commit()
+    return JSONResponse({"ok": True, "html": cleaned})
 
 
 def _load_cv(job: Job) -> Profile | None:

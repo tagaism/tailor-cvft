@@ -8,7 +8,7 @@
 </head>
 <body class="cv-page">
 {% endif %}
-<article class="cv">
+<article class="cv"{% if job %} data-job-id="{{ job.id }}"{% endif %}>
   <header class="cv-header">
     <h1>{{ cv.contact.full_name or 'Your name' }}</h1>
     <p class="contact-line">{{ cv_contact_bits(cv) | join(' | ') }}</p>
@@ -18,17 +18,19 @@
   <p class="intro">{{ cv.summary }}</p>
   {% endif %}
 
-  {% set skills = cv_skill_lines(cv) %}
-  {% if skills %}
+  {% if cv.skills %}
   <h2>Technical Skills</h2>
   <ul>
-    {% for line in skills %}<li>{{ line }}</li>{% endfor %}
+    {% for line in cv.skills %}
+    <li class="cv-bullet" data-path="skills.{{ loop.index0 }}">{{ line | rich | safe }}</li>
+    {% endfor %}
   </ul>
   {% endif %}
 
   {% if cv.experience %}
   <h2>Professional Experience</h2>
   {% for role in cv.experience %}
+  {% set role_i = loop.index0 %}
   <div class="role">
     <div class="role-head">
       <div>
@@ -42,7 +44,9 @@
     </div>
     {% if role.bullets %}
     <ul>
-      {% for bullet in role.bullets %}<li>{{ bullet }}</li>{% endfor %}
+      {% for bullet in role.bullets %}
+      <li class="cv-bullet" data-path="experience.{{ role_i }}.bullets.{{ loop.index0 }}">{{ bullet | rich | safe }}</li>
+      {% endfor %}
     </ul>
     {% endif %}
   </div>
@@ -52,6 +56,7 @@
   {% if cv.projects %}
   <h2>Projects</h2>
   {% for project in cv.projects %}
+  {% set project_i = loop.index0 %}
   <div class="role">
     <div class="role-head">
       <div>
@@ -62,7 +67,9 @@
     </div>
     {% if project.bullets %}
     <ul>
-      {% for bullet in project.bullets %}<li>{{ bullet }}</li>{% endfor %}
+      {% for bullet in project.bullets %}
+      <li class="cv-bullet" data-path="projects.{{ project_i }}.bullets.{{ loop.index0 }}">{{ bullet | rich | safe }}</li>
+      {% endfor %}
     </ul>
     {% endif %}
   </div>
@@ -99,10 +106,15 @@
   {% if cv.additional_skills %}
   <h2>Additional Skills</h2>
   <ul>
-    {% for item in cv.additional_skills %}<li>{{ item }}</li>{% endfor %}
+    {% for item in cv.additional_skills %}
+    <li class="cv-bullet" data-path="additional_skills.{{ loop.index0 }}">{{ item | rich | safe }}</li>
+    {% endfor %}
   </ul>
   {% endif %}
 </article>
+{% if job %}
+<script src="/static/cv-edit.js"></script>
+{% endif %}
 {% if standalone %}
 </body>
 </html>
