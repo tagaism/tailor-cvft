@@ -9,7 +9,7 @@
 </head>
 <body class="cv-page">
 {% endif %}
-<article class="letter">
+<article class="letter"{% if job %} data-job-id="{{ job.id }}"{% endif %}>
   <div class="sender">
     <h1>{{ cv.contact.full_name }}</h1>
     <p class="meta">
@@ -20,11 +20,12 @@
     {% endif %}
   </div>
   <div class="body">
-    {% for para in letter_text.split('\n\n') %}
-    <p>{{ para }}</p>
-    {% endfor %}
+    <div class="letter-edit cv-edit" data-path="cover_letter">{% if letter_text %}{{ letter_text | replace('\n', '<br>') | rich | safe }}{% endif %}</div>
   </div>
 </article>
+{% if job %}
+<script src="/static/cv-edit.js"></script>
+{% endif %}
 {% if standalone %}
 </body>
 </html>

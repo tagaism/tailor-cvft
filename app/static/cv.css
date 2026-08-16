@@ -115,6 +115,20 @@
 .letter h1 { font-size: 16pt; margin: 0 0 0.2rem; }
 .letter .meta { color: #333; font-size: 10.5pt; margin: 0; }
 .letter .body p { margin: 0 0 0.85rem; white-space: pre-wrap; }
+.letter .letter-edit {
+  min-height: 3em;
+  outline: none;
+}
+.letter .letter-edit:empty:not(.is-editing)::before {
+  content: "Click to edit the cover letter.";
+  color: #78716c;
+  font-style: italic;
+}
+.letter .letter-edit br {
+  display: block;
+  content: "";
+  margin-top: 0.85rem;
+}
 
 @page { size: letter; margin: 0.65in 0.7in 0.65in 0.7in; }
 

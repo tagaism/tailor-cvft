@@ -1,8 +1,9 @@
 (function () {
-  const article = document.querySelector(".cv");
-  if (!article) return;
-  const jobId = article.getAttribute("data-job-id");
-  if (!jobId) return;
+  if (window.__cvEditReady) return;
+  window.__cvEditReady = true;
+
+  const roots = document.querySelectorAll(".cv[data-job-id], .letter[data-job-id]");
+  if (!roots.length) return;
 
   const toolbar = document.createElement("div");
   toolbar.className = "cv-fmt";
@@ -14,6 +15,15 @@
 
   let active = null;
   let suppressBlur = false;
+
+  function jobIdFor(el) {
+    const root = el.closest("[data-job-id]");
+    return root ? root.getAttribute("data-job-id") : null;
+  }
+
+  function allowsLineBreak(el) {
+    return el.classList.contains("intro") || el.classList.contains("letter-edit");
+  }
 
   function placeToolbar(el) {
     const rect = el.getBoundingClientRect();
@@ -49,9 +59,9 @@
     suppressBlur = false;
   });
 
-  article.addEventListener("click", (event) => {
+  document.addEventListener("click", (event) => {
     const item = event.target.closest("[data-path]");
-    if (!item || !article.contains(item)) return;
+    if (!item || !item.closest(".cv[data-job-id], .letter[data-job-id]")) return;
     if (active === item) return;
     if (active) active.blur();
     active = item;
@@ -62,18 +72,18 @@
     syncButtons();
   });
 
-  article.addEventListener("keyup", () => {
+  document.addEventListener("keyup", () => {
     if (active) {
       placeToolbar(active);
       syncButtons();
     }
   });
 
-  article.addEventListener("keydown", (event) => {
+  document.addEventListener("keydown", (event) => {
     if (!active) return;
     if (event.key === "Enter") {
       event.preventDefault();
-      if (active.classList.contains("intro")) {
+      if (allowsLineBreak(active)) {
         document.execCommand("insertLineBreak", false, null);
         return;
       }
@@ -89,7 +99,7 @@
     }
   });
 
-  article.addEventListener("paste", (event) => {
+  document.addEventListener("paste", (event) => {
     if (!active) return;
     event.preventDefault();
     const text = (event.clipboardData || window.clipboardData).getData("text/plain");
@@ -103,7 +113,7 @@
     }
   });
 
-  article.addEventListener(
+  document.addEventListener(
     "blur",
     (event) => {
       const item = event.target.closest("[data-path]");
@@ -118,6 +128,8 @@
       hideToolbar();
       const path = item.getAttribute("data-path");
       const html = item.innerHTML;
+      const jobId = jobIdFor(item);
+      if (!jobId) return;
       fetch(`/jobs/${jobId}/cv-bullet`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },

@@ -254,7 +254,7 @@ def _safe_validate(model_cls, data):
 
 class BulletEdit(BaseModel):
     path: str = Field(min_length=1, max_length=200)
-    html: str = Field(default="", max_length=8000)
+    html: str = Field(default="", max_length=16000)
 
 
 @router.post("/jobs/{job_id}/cv-bullet")
@@ -266,6 +266,12 @@ async def save_cv_bullet(job_id: int, payload: BulletEdit, db: Session = Depends
     if generation is None:
         raise HTTPException(status_code=400, detail="Build a CV first.")
     cleaned = sanitize_rich(payload.html)
+    if payload.path == "cover_letter":
+        generation.cover_letter = cleaned
+        job.updated_at = datetime.now(timezone.utc)
+        db.add(generation)
+        db.commit()
+        return JSONResponse({"ok": True, "html": cleaned})
     cv = copy.deepcopy(generation.cv_json or {})
     try:
         apply_cv_path(cv, payload.path, cleaned)

@@ -6,7 +6,7 @@ from io import BytesIO
 from fpdf import FPDF
 
 from app.cv_layout import contact_bits, role_dates, skill_lines
-from app.richtext import rich_tokens
+from app.richtext import letter_html, rich_tokens
 from app.schemas import Profile
 
 
@@ -77,23 +77,32 @@ def _write(
     )
 
 
-def _write_rich(pdf: FPDF, html_text: str, *, indent: float = 0, prefix: str = "-  ") -> None:
+def _write_rich(
+    pdf: FPDF,
+    html_text: str,
+    *,
+    indent: float = 0,
+    prefix: str = "-  ",
+    height: float = 5,
+    size: float = 11,
+    br_extra: float = 0,
+) -> None:
     pdf.set_x(pdf.l_margin + indent)
-    pdf.set_font("Times", "", 11)
+    pdf.set_font("Times", "", size)
     if prefix:
-        pdf.write(5, prefix)
+        pdf.write(height, prefix)
     tokens = rich_tokens(html_text)
     if not tokens:
-        pdf.write(5, _safe(re.sub(r"<[^>]+>", "", html_text or "")))
+        pdf.write(height, _safe(re.sub(r"<[^>]+>", "", html_text or "")))
     else:
         for style, text in tokens:
             if style == "br":
-                pdf.ln(5)
+                pdf.ln(height + br_extra)
                 pdf.set_x(pdf.l_margin + indent)
                 continue
-            pdf.set_font("Times", style, 11)
-            pdf.write(5, _safe(text))
-    pdf.ln(5)
+            pdf.set_font("Times", style, size)
+            pdf.write(height, _safe(text))
+    pdf.ln(height)
     pdf.set_x(pdf.l_margin)
 
 
@@ -211,12 +220,7 @@ def letter_to_pdf(cv: Profile, letter: str, job_title: str = "", company: str = 
     if job_title or company:
         _write(pdf, " | ".join(part for part in [job_title, company] if part), height=5, size=10)
     pdf.ln(6)
-    for para in (letter or "").split("\n\n"):
-        text = para.strip()
-        if not text:
-            continue
-        _write(pdf, text, height=6)
-        pdf.ln(2.5)
+    _write_rich(pdf, letter_html(letter), prefix="", height=6, size=12, br_extra=2.5)
     buffer = BytesIO()
     pdf.output(buffer)
     return buffer.getvalue()
