@@ -87,22 +87,16 @@ mkdir -p data
 docker compose up --build
 ```
 
-4. API is at [http://127.0.0.1:8000](http://127.0.0.1:8000). For the React UI, also run:
+4. Open the React UI at [http://127.0.0.1:5173](http://127.0.0.1:5173). The API / Jinja pages stay at [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Then open [http://127.0.0.1:5173](http://127.0.0.1:5173). Vite proxies `/api` to port 8000. Preview and PDF links go to 8000 so the Times editor and downloads stay the same.
+Compose starts both containers. Nginx on **5173** serves the built React app and proxies `/api`, `/static`, health, previews, and PDFs to `web`. Build-pack requests can take up to 10 minutes.
 
 | Piece | Role |
 | --- | --- |
 | `Dockerfile` | Python 3.12 slim, installs `requirements.txt`, serves with uvicorn |
-| `docker-compose.yml` | Maps `8000:8000`, mounts `./data` → `/data` and `./app` → `/app/app` |
-| `frontend/` | Vite + React + MUI — run on the host (`npm run dev`), not in the container |
-| `.dockerignore` | Keeps `.venv`, `.git`, `data/`, `.env` out of the image |
+| `frontend/Dockerfile` | Node build of the Vite app, then nginx |
+| `docker-compose.yml` | `web` on `8000`, `ui` on `5173`; mounts `./data` and `./app` on `web` |
+| `.dockerignore` | Keeps `.venv`, `.git`, `data/`, `.env` out of the API image |
 
 Compose **overrides** two values so the container works:
 
@@ -114,12 +108,12 @@ Compose **overrides** two values so the container works:
 `localhost` inside the container is not your Mac. `host.docker.internal` is. Linux already has `extra_hosts: host.docker.internal:host-gateway` in the Compose file.
 
 ```bash
-docker compose logs -f web    # follow app logs
+docker compose logs -f        # follow API + UI logs
 docker compose down           # stop
 docker compose up -d --build  # rebuild and run in the background
 ```
 
-**Port 8000 already in use?** Stop a local `uvicorn` first.
+**Port 8000 or 5173 already in use?** Stop a local `uvicorn` or `npm run dev` first.
 
 **Banner cannot reach LM Studio?** Confirm the model server is on `0.0.0.0:1234`, then:
 
@@ -146,7 +140,7 @@ uvicorn app.main:app --reload
 
 The API is [http://127.0.0.1:8000](http://127.0.0.1:8000). Here `LLM_BASE_URL` stays `http://127.0.0.1:1234/v1` as in `.env.example`.
 
-Then start the React UI:
+Then start the React UI (Vite, with hot reload):
 
 ```bash
 cd frontend
@@ -154,7 +148,7 @@ npm install
 npm run dev
 ```
 
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173).
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). With Docker you can skip this and use the `ui` container instead.
 
 ## First session
 
@@ -207,7 +201,7 @@ profile.json + uploads under ./data   ← gitignored
 fpdf2  →  Times New Roman PDF
 httpx + trafilatura  →  job URL fetch
 openai SDK  →  LM Studio /v1
-Docker Compose  →  API packaging
+Docker Compose  →  API (`web`) + React nginx (`ui`)
 ```
 
 ```
@@ -216,7 +210,7 @@ app/
   services/    llm · scraper · pdf · parser · merge
   templates/   Jinja pages + Times CV / letter preview
   schemas.py   Profile, Position, Company, ApplicationStatus
-frontend/      Vite + React + Material UI
+frontend/      Vite + React + Material UI + nginx image
 Dockerfile
 docker-compose.yml
 ```
