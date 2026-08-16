@@ -8,7 +8,8 @@
 
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white">
-  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-Jinja2-009688?style=for-the-badge&logo=fastapi&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-JSON%20API-009688?style=for-the-badge&logo=fastapi&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/UI-React%20%2B%20MUI-087EA4?style=for-the-badge&logo=react&logoColor=white">
   <img alt="Docker" src="https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white">
   <img alt="LM Studio" src="https://img.shields.io/badge/LLM-LM%20Studio%20local-111111?style=for-the-badge">
   <img alt="Offline" src="https://img.shields.io/badge/data-stays%20on%20disk-8A4B08?style=for-the-badge">
@@ -46,6 +47,15 @@ The LLM is [LM Studio](https://lmstudio.ai) on your machine. Facts may be rephra
 
 LinkedIn and some ATS pages block scraping. The job is still saved — paste the description and continue.
 
+There are two UIs on the same API:
+
+| URL | What |
+| --- | --- |
+| [http://127.0.0.1:5173](http://127.0.0.1:5173) | **React + Material UI** (use this) |
+| [http://127.0.0.1:8000](http://127.0.0.1:8000) | Original Jinja pages (still work) |
+
+The Times CV / cover letter preview is the same HTML on both. React embeds it; click-to-edit still saves on blur.
+
 ## Tour
 
 ```text
@@ -53,6 +63,7 @@ LinkedIn and some ATS pages block scraping. The job is still saved — paste the
 /jobs/{id}       Source + status + Build tailored pack + results
 /companies       Employers (created when you name a company)
 /profile         Contact, experience, upload PDF / DOCX / TXT
+/api/...         JSON for the React app (health, jobs, profile, companies)
 /health          Liveness probe (used by Docker)
 ```
 
@@ -76,12 +87,21 @@ mkdir -p data
 docker compose up --build
 ```
 
-4. Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+4. API is at [http://127.0.0.1:8000](http://127.0.0.1:8000). For the React UI, also run:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Then open [http://127.0.0.1:5173](http://127.0.0.1:5173). Vite proxies `/api` to port 8000. Preview and PDF links go to 8000 so the Times editor and downloads stay the same.
 
 | Piece | Role |
 | --- | --- |
 | `Dockerfile` | Python 3.12 slim, installs `requirements.txt`, serves with uvicorn |
 | `docker-compose.yml` | Maps `8000:8000`, mounts `./data` → `/data` and `./app` → `/app/app` |
+| `frontend/` | Vite + React + MUI — run on the host (`npm run dev`), not in the container |
 | `.dockerignore` | Keeps `.venv`, `.git`, `data/`, `.env` out of the image |
 
 Compose **overrides** two values so the container works:
@@ -124,7 +144,17 @@ Start LM Studio on `http://127.0.0.1:1234`, then:
 uvicorn app.main:app --reload
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000). Here `LLM_BASE_URL` stays `http://127.0.0.1:1234/v1` as in `.env.example`.
+The API is [http://127.0.0.1:8000](http://127.0.0.1:8000). Here `LLM_BASE_URL` stays `http://127.0.0.1:1234/v1` as in `.env.example`.
+
+Then start the React UI:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173).
 
 ## First session
 
@@ -132,7 +162,7 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000). Here `LLM_BASE_URL` stays `
 2. **Positions** — add the job.
 3. Open the role → **Build tailored pack**.
 4. Leave the tab open. Local models often take **3–10 minutes**.
-5. Preview on the page. Click any CV bullet to edit; **B** / **I** for bold and italic; click outside to save.
+5. Preview on the page. Click the intro, a CV bullet, or the cover letter to edit; **B** / **I** for bold and italic; click outside to save.
 6. Download the CV / letter PDFs.
 
 ## LM Studio
@@ -152,9 +182,9 @@ OpenAI-compatible calls:
 - `GET /v1/models`
 - `POST /v1/chat/completions`
 
-Use the app at **:8000**. Opening **:1234** in a browser is the model server, not tailor-cvft.
+Use the React app at **:5173** (API + Jinja at **:8000**). Opening **:1234** in a browser is the model server, not tailor-cvft.
 
-On the tailored CV, click a bullet to edit. **B** / **I** (or Ctrl/Cmd+B and Ctrl/Cmd+I) apply bold and italic. Click outside the bullet to save. Downloads pick up those edits.
+On the tailored CV or cover letter, click to edit. **B** / **I** (or Ctrl/Cmd+B and Ctrl/Cmd+I) apply bold and italic. Click outside to save. Downloads pick up those edits.
 
 ## How tailoring is constrained
 
@@ -170,22 +200,23 @@ If JSON is cut off mid-stream (Gemma sometimes spends a minute reasoning first),
 ## Stack
 
 ```
-FastAPI + Jinja2 + vanilla CSS
+FastAPI  →  JSON /api + Jinja pages + PDF
+React + MUI (Vite)  →  product UI on :5173
 SQLite (jobs, companies, generations)
 profile.json + uploads under ./data   ← gitignored
 fpdf2  →  Times New Roman PDF
 httpx + trafilatura  →  job URL fetch
 openai SDK  →  LM Studio /v1
-Docker Compose  →  optional packaging
+Docker Compose  →  API packaging
 ```
 
 ```
 app/
-  routers/     jobs · companies · profile
+  routers/     api · jobs · companies · profile
   services/    llm · scraper · pdf · parser · merge
-  templates/   positions, companies, profile, CV preview
-  cv_layout.py skill groups + contact line
+  templates/   Jinja pages + Times CV / letter preview
   schemas.py   Profile, Position, Company, ApplicationStatus
+frontend/      Vite + React + Material UI
 Dockerfile
 docker-compose.yml
 ```
