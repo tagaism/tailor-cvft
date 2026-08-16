@@ -1,20 +1,69 @@
-# Resumeer
+# Resum<span>eer</span>
 
-A local, single-user resume builder. You save **job descriptions**, then build a tailored CV, cover letter, and match analysis under each one. The LLM runs in [LM Studio](https://lmstudio.ai) on your machine.
+<p align="center">
+  <strong>A local resume studio.</strong><br>
+  Save a job. Tailor a CV. Track the application.<br>
+  The model never leaves your machine.
+</p>
 
-## What it does
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-Jinja2-009688?style=for-the-badge&logo=fastapi&logoColor=white">
+  <img alt="LM Studio" src="https://img.shields.io/badge/LLM-LM%20Studio%20local-111111?style=for-the-badge">
+  <img alt="Offline" src="https://img.shields.io/badge/data-stays%20on%20disk-8A4B08?style=for-the-badge">
+</p>
 
-1. Keep one personal profile (or seed it by uploading a PDF/DOCX/TXT CV).
-2. Add a job from a company careers URL or a pasted LinkedIn posting.
-3. Build a tailored pack: ATS-friendly CV preview + PDF, cover letter, and an honest match report.
+---
 
-Facts stay grounded in your profile. The model may rephrase, reorder, and drop irrelevant bullets — it is instructed not to invent jobs, dates, degrees, or metrics.
+Resumeer is a single-user web app for people who apply often and refuse to hand their CV to a cloud model.
 
-LinkedIn and some ATS pages block scraping. If the fetch is thin, the job is still saved; paste the posting text and continue.
+You keep **one source-of-truth profile**. Under each **job description** you generate a tailored pack: Times-style CV, cover letter, and an honest match report. Companies and application status live next to the posting — Saved → Applied → Under consideration → Rejected / Declined.
 
-## Setup
+The LLM is [LM Studio](https://lmstudio.ai) on `localhost`. Facts may be rephrased or reordered. They are not invented.
+
+```
+  Profile  +  Job posting  +  your notes
+                 │
+                 ▼
+         LM Studio (local)
+                 │
+                 ▼
+     ┌───────────┼───────────┐
+     ▼           ▼           ▼
+   CV PDF    Cover letter   Match
+```
+
+## Why this shape
+
+| You want | Resumeer does |
+| --- | --- |
+| One profile, many applications | Upload a CV once, edit it, reuse it |
+| A CV that reads like *that* job | Build a pack under the position, not a generic rewrite |
+| A paper look, not a SaaS card | Google-Doc-style Times layout: intro, technical skills, experience, education |
+| Tracking without a CRM | Company records + application statuses on each role |
+| Privacy | API key stays in `.env`. Inference is local |
+
+LinkedIn and some ATS pages block scraping. The job is still saved — paste the description and continue.
+
+## Tour
+
+```text
+/jobs            Positions — add a posting, filter by status
+/jobs/{id}       Source + status + Build tailored pack + results
+/companies       Employers (created when you name a company)
+/profile         Contact, experience, upload PDF / DOCX / TXT
+```
+
+**Add a position** with company name, URL (optional), job description, required skills, desired skills, and notes.
+
+**Statuses**
+
+`Saved` → `Applied` → `Under consideration` → `Rejected` (they said no) or `Declined` (you said no)
+
+## Quick start
 
 ```bash
+git clone <your-remote> resumeer
 cd resumeer
 python3 -m venv .venv
 source .venv/bin/activate
@@ -22,38 +71,79 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-PDF export uses `fpdf2` (no extra system libraries). The on-screen preview is HTML/CSS.
-
-## Run LM Studio
-
-1. Open LM Studio and load a model.
-2. Developer tab → start the local server (default `http://127.0.0.1:1234`).
-3. Optional: set `LLM_MODEL` in `.env` to a specific model id. Leave it empty to use the first chat model LM Studio reports.
-
-The OpenAI-compatible base URL is `http://127.0.0.1:1234/v1`:
-
-- `GET /v1/models`
-- `POST /v1/chat/completions`
-
-`LLM_API_KEY` defaults to `lm-studio` (the SDK needs a string; LM Studio ignores it unless you set a token).
-
-## Start the app
+Start LM Studio, load a chat model, turn on the local server (**Developer** tab, port `1234`).
 
 ```bash
-source .venv/bin/activate
 uvicorn app.main:app --reload
 ```
 
 Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
-## Layout
+1. **Profile** — upload a CV or fill the form.
+2. **Positions** — add the job.
+3. Open the role → **Build tailored pack**.
+4. Leave the tab open. Local models often take **3–10 minutes**.
+5. Preview on the page, then download the CV / letter PDFs.
 
-- `/jobs` — positions (home), filterable by application status
-- `/jobs/new` — URL + notes + optional pasted JD
-- `/jobs/{id}` — company, status, source, **Build tailored pack**, then analysis / CV / letter
-- `/companies` — employers; created automatically when you save a position
-- `/profile` — editable profile + CV upload
+## LM Studio
 
-Application statuses: Saved, Applied, Under consideration, Rejected (they rejected you), Declined (you rejected them).
+| Setting | Default |
+| --- | --- |
+| `LLM_BASE_URL` | `http://127.0.0.1:1234/v1` |
+| `LLM_API_KEY` | `lm-studio` (SDK needs a string; LM Studio ignores it unless you set a token) |
+| `LLM_MODEL` | empty → first chat model from `GET /v1/models` |
+| `LLM_TIMEOUT` | `600` seconds |
 
-Data stays in `./data` (SQLite, `profile.json`, uploads). That folder is gitignored. Company and position types live in `app/schemas.py`; the same records are stored in SQLite (`companies`, `jobs`).
+OpenAI-compatible calls:
+
+- `GET /v1/models`
+- `POST /v1/chat/completions`
+
+Use the app at **:8000**. Opening **:1234** in a browser is the model server, not Resumeer.
+
+## How tailoring is constrained
+
+The system prompt is in [`app/services/llm.py`](app/services/llm.py).
+
+- Only facts from your profile
+- Skills grouped as **Languages / Databases / Frameworks / Technologies and Tools**
+- Intro paragraph above Technical Skills
+- Match report lists real gaps — it is not a pep talk
+
+If JSON is cut off mid-stream (Gemma sometimes spends a minute reasoning first), the app tries to repair the object so a finished CV is not thrown away.
+
+## Stack
+
+```
+FastAPI + Jinja2 + vanilla CSS
+SQLite (jobs, companies, generations)
+profile.json + uploads under ./data   ← gitignored
+fpdf2  →  Times New Roman PDF
+httpx + trafilatura  →  job URL fetch
+openai SDK  →  LM Studio /v1
+```
+
+```
+app/
+  routers/     jobs · companies · profile
+  services/    llm · scraper · pdf · parser · merge
+  templates/   positions, companies, profile, CV preview
+  cv_layout.py skill groups + contact line
+  schemas.py   Profile, Position, Company, ApplicationStatus
+```
+
+## Data
+
+Everything stays in `./data` on your disk.
+
+| File | What |
+| --- | --- |
+| `resumeer.db` | companies, positions, generations |
+| `profile.json` | your source CV |
+| `uploads/` | files you imported |
+
+That directory is gitignored. Do not commit a filled profile.
+
+## License
+
+Personal project. Use and fork as you like unless you add a license file later.
