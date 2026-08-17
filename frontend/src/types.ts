@@ -13,6 +13,7 @@ export type StatusOption = {
 
 export type LlmHealth = {
   ok: boolean;
+  provider?: string;
   model: string;
   message: string;
 };

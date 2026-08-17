@@ -57,7 +57,12 @@ async def api_health():
     llm = llm_health()
     return {
         "ok": True,
-        "llm": {"ok": bool(llm.get("ok")), "model": llm.get("model") or "", "message": llm.get("message") or ""},
+        "llm": {
+            "ok": bool(llm.get("ok")),
+            "provider": llm.get("provider") or "",
+            "model": llm.get("model") or "",
+            "message": llm.get("message") or "",
+        },
         "statuses": APPLICATION_STATUSES,
     }
 

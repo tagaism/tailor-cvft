@@ -8,7 +8,7 @@ from typing import Any
 import httpx
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
-from app.config import settings
+from app.llm_settings import ResolvedLlm, resolve_llm
 from app.schemas import MatchAnalysis, Profile, TailorPack
 
 PROFILE_SCHEMA_HINT = """
@@ -58,55 +58,74 @@ class LLMError(Exception):
     pass
 
 
+def _resolved() -> ResolvedLlm:
+    try:
+        llm = resolve_llm()
+    except ValueError as exc:
+        raise LLMError(str(exc)) from exc
+    missing = llm.missing_config()
+    if missing:
+        raise LLMError(missing)
+    return llm
+
+
 def openai_base_url() -> str:
-    raw = (settings.llm_base_url or "http://127.0.0.1:1234/v1").rstrip("/")
-    if not raw.endswith("/v1"):
-        raw = f"{raw}/v1"
-    return raw
+    return _resolved().base_url
 
 
 def _client(timeout: float | None = None, connect: float = 2.0) -> OpenAI:
+    llm = _resolved()
     return OpenAI(
-        api_key=settings.llm_api_key or "lm-studio",
-        base_url=openai_base_url(),
-        timeout=httpx.Timeout(timeout if timeout is not None else settings.llm_timeout, connect=connect),
+        api_key=llm.api_key or "lm-studio",
+        base_url=llm.base_url,
+        timeout=httpx.Timeout(timeout if timeout is not None else llm.timeout, connect=connect),
     )
 
 
 def resolve_model(client: OpenAI | None = None) -> str:
-    if settings.llm_model.strip():
-        return settings.llm_model.strip()
+    llm = _resolved()
+    if llm.model:
+        return llm.model
+    if llm.model_required:
+        raise LLMError(f"Set LLM_MODEL for {llm.label}.")
     client = client or _client()
     try:
         models = client.models.list()
     except Exception as exc:
-        raise LLMError(_friendly_connection_error(exc)) from exc
+        raise LLMError(_friendly_connection_error(exc, llm)) from exc
     ids = [item.id for item in getattr(models, "data", []) if getattr(item, "id", None)]
     chat_ids = [item for item in ids if "embed" not in item.lower()]
     chosen = chat_ids or ids
     if not chosen:
         raise LLMError(
-            "LM Studio is running but no model is loaded. Load a model in LM Studio, then try again."
+            f"{llm.label} is reachable but no chat model is available. "
+            "Set LLM_MODEL or load a model, then try again."
         )
     return chosen[0]
 
 
-def _friendly_connection_error(exc: Exception) -> str:
+def _friendly_connection_error(exc: Exception, llm: ResolvedLlm | None = None) -> str:
+    llm = llm or _resolved()
     if isinstance(exc, APITimeoutError):
+        extra = (
+            " Local models often spend a minute reasoning before they write JSON."
+            if llm.local
+            else ""
+        )
         return (
-            f"LM Studio took longer than {int(settings.llm_timeout)}s. "
-            "Gemma often spends a minute reasoning before it writes JSON — "
-            "keep the tab open and try Build again. Raise LLM_TIMEOUT in .env if needed."
+            f"{llm.label} took longer than {int(llm.timeout)}s.{extra} "
+            "Keep the tab open and try Build again. Raise LLM_TIMEOUT in .env if needed."
         )
     if isinstance(exc, APIConnectionError):
-        return (
-            "Cannot reach LM Studio at "
-            f"{openai_base_url()}. Start the local server (Developer tab, port 1234) "
-            "and load a model."
+        hint = (
+            " Start the local server (Developer tab, port 1234) and load a model."
+            if llm.local
+            else " Check LLM_BASE_URL, LLM_API_KEY, and network access."
         )
+        return f"Cannot reach {llm.label} at {llm.base_url}.{hint}"
     if isinstance(exc, APIStatusError):
-        return f"LM Studio returned HTTP {exc.status_code}: {exc.message}"
-    return f"LM Studio request failed: {exc}"
+        return f"{llm.label} returned HTTP {exc.status_code}: {exc.message}"
+    return f"{llm.label} request failed: {exc}"
 
 
 _HEALTH_CACHE: tuple[float, dict[str, Any]] | None = None
@@ -114,29 +133,39 @@ _HEALTH_TTL_SECONDS = 20.0
 
 
 def llm_health() -> dict[str, Any]:
-    """Never block a page on LM Studio. Prefer a short HTTP probe over the SDK."""
+    """Never block a page on the model host. Prefer a short HTTP probe over the SDK."""
     global _HEALTH_CACHE
     now = time.time()
     if _HEALTH_CACHE and now - _HEALTH_CACHE[0] < _HEALTH_TTL_SECONDS:
         return _HEALTH_CACHE[1]
-    if settings.llm_model.strip():
-        fallback = {
-            "ok": True,
-            "model": settings.llm_model.strip(),
-            "message": f"LM Studio · {settings.llm_model.strip()}",
+    try:
+        llm = resolve_llm()
+    except ValueError as exc:
+        result = {"ok": False, "provider": "", "model": "", "message": str(exc)}
+        _HEALTH_CACHE = (now, result)
+        return result
+    missing = llm.missing_config()
+    if missing:
+        result = {
+            "ok": False,
+            "provider": llm.provider,
+            "model": llm.model,
+            "message": missing,
         }
-    else:
-        fallback = {
-            "ok": True,
-            "model": "",
-            "message": "LM Studio · local",
-        }
+        _HEALTH_CACHE = (now, result)
+        return result
+    fallback = {
+        "ok": True,
+        "provider": llm.provider,
+        "model": llm.model,
+        "message": f"{llm.label} · {llm.model}" if llm.model else f"{llm.label}",
+    }
     try:
         headers = {}
-        if settings.llm_api_key:
-            headers["Authorization"] = f"Bearer {settings.llm_api_key}"
+        if llm.api_key:
+            headers["Authorization"] = f"Bearer {llm.api_key}"
         response = httpx.get(
-            f"{openai_base_url()}/models",
+            f"{llm.base_url}/models",
             headers=headers,
             timeout=httpx.Timeout(0.8, connect=0.4),
         )
@@ -148,23 +177,31 @@ def llm_health() -> dict[str, Any]:
             if isinstance(item, dict) and item.get("id")
         ]
         chat_ids = [item for item in ids if "embed" not in item.lower()]
-        model = settings.llm_model.strip() or (chat_ids[0] if chat_ids else (ids[0] if ids else ""))
+        model = llm.model or (chat_ids[0] if chat_ids else (ids[0] if ids else ""))
         if not model:
             result = {
                 "ok": False,
+                "provider": llm.provider,
                 "model": "",
-                "message": "LM Studio is running but no model is loaded",
+                "message": f"{llm.label} is reachable but no model is available. Set LLM_MODEL.",
             }
         else:
-            result = {"ok": True, "model": model, "message": f"LM Studio · {model}"}
+            result = {
+                "ok": True,
+                "provider": llm.provider,
+                "model": model,
+                "message": f"{llm.label} · {model}",
+            }
     except Exception:
         result = _HEALTH_CACHE[1] if _HEALTH_CACHE else fallback
         result = dict(result)
         if not _HEALTH_CACHE:
             result["ok"] = False
+            result["provider"] = llm.provider
+            result["model"] = llm.model
             result["message"] = (
-                f"Cannot reach LM Studio at {openai_base_url()}. "
-                "Start the local server and load a model."
+                f"Cannot reach {llm.label} at {llm.base_url}."
+                + (" Start the local server and load a model." if llm.local else " Check LLM_API_KEY and LLM_BASE_URL.")
             )
     _HEALTH_CACHE = (now, result)
     return result

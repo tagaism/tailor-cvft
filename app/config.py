@@ -13,10 +13,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    llm_base_url: str = "http://127.0.0.1:1234/v1"
-    llm_api_key: str = "lm-studio"
+    llm_provider: str = "lmstudio"
+    llm_base_url: str = ""
+    llm_api_key: str = ""
     llm_model: str = ""
-    llm_timeout: float = 600.0
+    llm_timeout: float | None = None
+    llm_in_docker: bool = False
     data_dir: Path = ROOT_DIR / "data"
 
     @property
