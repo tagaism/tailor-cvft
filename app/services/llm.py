@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from typing import Any
+from typing import Any, TypedDict
 
 import httpx
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
@@ -58,6 +58,13 @@ class LLMError(Exception):
     pass
 
 
+class LlmHealth(TypedDict):
+    ok: bool
+    provider: str
+    model: str
+    message: str
+
+
 def _resolved() -> ResolvedLlm:
     try:
         llm = resolve_llm()
@@ -84,8 +91,9 @@ def _client(timeout: float | None = None, connect: float = 2.0) -> OpenAI:
 
 def resolve_model(client: OpenAI | None = None) -> str:
     llm = _resolved()
-    if llm.model:
-        return llm.model
+    configured = _model_id(llm.model)
+    if configured:
+        return configured
     if llm.model_required:
         raise LLMError(f"Set LLM_MODEL for {llm.label}.")
     client = client or _client()
@@ -128,11 +136,22 @@ def _friendly_connection_error(exc: Exception, llm: ResolvedLlm | None = None) -
     return f"{llm.label} request failed: {exc}"
 
 
-_HEALTH_CACHE: tuple[float, dict[str, Any]] | None = None
+_HEALTH_CACHE: tuple[float, LlmHealth] | None = None
 _HEALTH_TTL_SECONDS = 20.0
 
 
-def llm_health() -> dict[str, Any]:
+def _model_id(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _health_model_message(label: str, model: Any) -> str:
+    name = _model_id(model)
+    return f"{label} · {name}" if name else label
+
+
+def llm_health() -> LlmHealth:
     """Never block a page on the model host. Prefer a short HTTP probe over the SDK."""
     global _HEALTH_CACHE
     now = time.time()
@@ -141,25 +160,25 @@ def llm_health() -> dict[str, Any]:
     try:
         llm = resolve_llm()
     except ValueError as exc:
-        result = {"ok": False, "provider": "", "model": "", "message": str(exc)}
+        result: LlmHealth = {
+            "ok": False,
+            "provider": "unknown",
+            "model": "",
+            "message": str(exc),
+        }
         _HEALTH_CACHE = (now, result)
         return result
+    configured = _model_id(llm.model)
     missing = llm.missing_config()
     if missing:
         result = {
             "ok": False,
             "provider": llm.provider,
-            "model": llm.model,
+            "model": configured,
             "message": missing,
         }
         _HEALTH_CACHE = (now, result)
         return result
-    fallback = {
-        "ok": True,
-        "provider": llm.provider,
-        "model": llm.model,
-        "message": f"{llm.label} · {llm.model}" if llm.model else f"{llm.label}",
-    }
     try:
         headers = {}
         if llm.api_key:
@@ -177,32 +196,60 @@ def llm_health() -> dict[str, Any]:
             if isinstance(item, dict) and item.get("id")
         ]
         chat_ids = [item for item in ids if "embed" not in item.lower()]
-        model = llm.model or (chat_ids[0] if chat_ids else (ids[0] if ids else ""))
-        if not model:
+        available = chat_ids or ids
+        if configured:
+            if available and configured not in available:
+                result = {
+                    "ok": False,
+                    "provider": llm.provider,
+                    "model": configured,
+                    "message": (
+                        f"{llm.label} is reachable but {configured} is not available. "
+                        "Set LLM_MODEL to a loaded chat model."
+                    ),
+                }
+            else:
+                result = {
+                    "ok": True,
+                    "provider": llm.provider,
+                    "model": configured,
+                    "message": _health_model_message(llm.label, configured),
+                }
+        elif not available:
             result = {
                 "ok": False,
                 "provider": llm.provider,
                 "model": "",
-                "message": f"{llm.label} is reachable but no model is available. Set LLM_MODEL.",
+                "message": (
+                    f"{llm.label} is reachable but no model is available. "
+                    "Set LLM_MODEL or load a model."
+                ),
             }
         else:
+            model = available[0]
             result = {
                 "ok": True,
                 "provider": llm.provider,
                 "model": model,
-                "message": f"{llm.label} · {model}",
+                "message": _health_model_message(llm.label, model),
             }
     except Exception:
-        result = _HEALTH_CACHE[1] if _HEALTH_CACHE else fallback
-        result = dict(result)
-        if not _HEALTH_CACHE:
-            result["ok"] = False
-            result["provider"] = llm.provider
-            result["model"] = llm.model
-            result["message"] = (
-                f"Cannot reach {llm.label} at {llm.base_url}."
-                + (" Start the local server and load a model." if llm.local else " Check LLM_API_KEY and LLM_BASE_URL.")
-            )
+        if _HEALTH_CACHE:
+            result = _HEALTH_CACHE[1]
+        else:
+            result = {
+                "ok": False,
+                "provider": llm.provider,
+                "model": configured,
+                "message": (
+                    f"Cannot reach {llm.label} at {llm.base_url}."
+                    + (
+                        " Start the local server and load a model."
+                        if llm.local
+                        else " Check LLM_API_KEY and LLM_BASE_URL."
+                    )
+                ),
+            }
     _HEALTH_CACHE = (now, result)
     return result
 

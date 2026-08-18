@@ -9,7 +9,7 @@ services:
     environment:
       DATA_DIR: /data
       # Rewrite 127.0.0.1 → host.docker.internal for local providers only.
-      LLM_IN_DOCKER: "1"
+      LLM_IN_DOCKER: true
     volumes:
       - ./data:/data
       - ./app:/app/app

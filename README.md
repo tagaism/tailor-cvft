@@ -103,7 +103,7 @@ Compose **overrides** two values so the container works:
 | Variable | In the container |
 | --- | --- |
 | `DATA_DIR` | `/data` (your `./data` folder) |
-| `LLM_IN_DOCKER` | `1` — rewrites `127.0.0.1` to `host.docker.internal` for local providers only |
+| `LLM_IN_DOCKER` | `true` — rewrites `127.0.0.1` to `host.docker.internal` for local providers only |
 
 `localhost` inside the container is not your Mac. `host.docker.internal` is. Linux already has `extra_hosts: host.docker.internal:host-gateway` in the Compose file.
 
@@ -165,12 +165,14 @@ All providers use the OpenAI-compatible SDK (`GET /v1/models`, `POST /v1/chat/co
 
 | `LLM_PROVIDER` | Base URL | Key | Model |
 | --- | --- | --- | --- |
-| `lmstudio` (default) | `http://127.0.0.1:1234/v1` | optional (`lm-studio`) | empty → first loaded chat model |
+| `lmstudio` (default) | `http://127.0.0.1:1234/v1` | optional | empty → first loaded chat model |
 | `openai` | `https://api.openai.com/v1` | required | required |
 | `openrouter` | `https://openrouter.ai/api/v1` | required | required |
 | `groq` | `https://api.groq.com/openai/v1` | required | required |
 | `xai` | `https://api.x.ai/v1` | required | required |
-| `custom` | `LLM_BASE_URL` (required) | optional | required unless the host is local |
+| `custom` | **required** — set `LLM_BASE_URL` | optional | required unless the host is local |
+
+`custom` has no default host: `LLM_BASE_URL` must be the OpenAI-compatible `/v1` endpoint (the app appends `/v1` if you omit it). Without that variable, generation fails with “Set LLM_BASE_URL for a custom OpenAI-compatible host.”
 
 `LLM_TIMEOUT` defaults to 600s for LM Studio and 120s for cloud. In Docker, a local `127.0.0.1` / `localhost` URL is rewritten to `host.docker.internal` so the container can reach LM Studio on the host. Cloud URLs are left alone.
 
