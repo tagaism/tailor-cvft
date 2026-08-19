@@ -26,7 +26,7 @@ export default function AppShell() {
     api
       .health()
       .then((data) => setLlm(data.llm))
-      .catch(() => setLlm({ ok: false, model: "", message: "API unreachable" }));
+      .catch(() => setLlm({ ok: false, model: "", message: "API unreachable", checked_at: "" }));
   }, []);
 
   return (
@@ -62,7 +62,7 @@ export default function AppShell() {
               color={llm.ok ? "success" : "error"}
               variant="outlined"
               label={llm.message}
-              title={llm.message}
+              title={llm.checked_at ? `${llm.message} · checked ${llm.checked_at}` : llm.message}
             />
           )}
         </Toolbar>

@@ -8,8 +8,8 @@ services:
       - .env
     environment:
       DATA_DIR: /data
-      # Container localhost is not your Mac. LM Studio stays on the host.
-      LLM_BASE_URL: http://host.docker.internal:1234/v1
+      # Rewrite 127.0.0.1 → host.docker.internal for local providers only.
+      LLM_IN_DOCKER: true
     volumes:
       - ./data:/data
       - ./app:/app/app

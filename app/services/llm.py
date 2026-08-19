@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import re
 import time
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, TypedDict
 
 import httpx
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
-from app.config import settings
+from app.config import DEFAULT_LLM_PROVIDER, LOCAL_LLM_API_KEY, settings
+from app.llm_settings import ResolvedLlm, resolve_llm
 from app.schemas import MatchAnalysis, Profile, TailorPack
 
 PROFILE_SCHEMA_HINT = """
@@ -58,85 +60,151 @@ class LLMError(Exception):
     pass
 
 
+class LlmHealth(TypedDict):
+    ok: bool
+    provider: str
+    model: str
+    message: str
+    checked_at: str
+
+
+_RESOLVED_CACHE: ResolvedLlm | None = None
+
+
+def _resolved() -> ResolvedLlm:
+    """Return cached ``resolve_llm()`` or raise ``LLMError`` if config is incomplete.
+
+    Settings come from ``.env`` at process start; a restart is required to pick up changes.
+    Failures are not cached so a later call can succeed after a transient config read.
+    """
+    global _RESOLVED_CACHE
+    if _RESOLVED_CACHE is not None:
+        return _RESOLVED_CACHE
+    try:
+        llm = resolve_llm()
+    except ValueError as exc:
+        raise LLMError(str(exc)) from exc
+    missing = llm.missing_config()
+    if missing:
+        raise LLMError(missing)
+    _RESOLVED_CACHE = llm
+    return llm
+
+
 def openai_base_url() -> str:
-    raw = (settings.llm_base_url or "http://127.0.0.1:1234/v1").rstrip("/")
-    if not raw.endswith("/v1"):
-        raw = f"{raw}/v1"
-    return raw
+    return _resolved().base_url
 
 
 def _client(timeout: float | None = None, connect: float = 2.0) -> OpenAI:
+    llm = _resolved()
     return OpenAI(
-        api_key=settings.llm_api_key or "lm-studio",
-        base_url=openai_base_url(),
-        timeout=httpx.Timeout(timeout if timeout is not None else settings.llm_timeout, connect=connect),
+        api_key=llm.api_key or LOCAL_LLM_API_KEY,
+        base_url=llm.base_url,
+        timeout=httpx.Timeout(timeout if timeout is not None else llm.timeout, connect=connect),
     )
 
 
 def resolve_model(client: OpenAI | None = None) -> str:
-    if settings.llm_model.strip():
-        return settings.llm_model.strip()
+    llm = _resolved()
+    configured = _model_id(llm.model)
+    if configured:
+        return configured
+    if llm.model_required:
+        raise LLMError(f"Set LLM_MODEL for {llm.label}.")
     client = client or _client()
     try:
         models = client.models.list()
     except Exception as exc:
-        raise LLMError(_friendly_connection_error(exc)) from exc
+        raise LLMError(_friendly_connection_error(exc, llm)) from exc
     ids = [item.id for item in getattr(models, "data", []) if getattr(item, "id", None)]
     chat_ids = [item for item in ids if "embed" not in item.lower()]
     chosen = chat_ids or ids
     if not chosen:
         raise LLMError(
-            "LM Studio is running but no model is loaded. Load a model in LM Studio, then try again."
+            f"{llm.label} is reachable but no chat model is available. "
+            "Set LLM_MODEL or load a model, then try again."
         )
     return chosen[0]
 
 
-def _friendly_connection_error(exc: Exception) -> str:
+def _friendly_connection_error(exc: Exception, llm: ResolvedLlm | None = None) -> str:
+    llm = llm or _resolved()
     if isinstance(exc, APITimeoutError):
+        extra = (
+            " Local models often spend a minute reasoning before they write JSON."
+            if llm.local
+            else ""
+        )
         return (
-            f"LM Studio took longer than {int(settings.llm_timeout)}s. "
-            "Gemma often spends a minute reasoning before it writes JSON — "
-            "keep the tab open and try Build again. Raise LLM_TIMEOUT in .env if needed."
+            f"{llm.label} took longer than {int(llm.timeout)}s.{extra} "
+            "Keep the tab open and try Build again. Raise LLM_TIMEOUT in .env if needed."
         )
     if isinstance(exc, APIConnectionError):
-        return (
-            "Cannot reach LM Studio at "
-            f"{openai_base_url()}. Start the local server (Developer tab, port 1234) "
-            "and load a model."
+        hint = (
+            " Start the local server (Developer tab, port 1234) and load a model."
+            if llm.local
+            else " Check LLM_BASE_URL, LLM_API_KEY, and network access."
         )
+        return f"Cannot reach {llm.label} at {llm.base_url}.{hint}"
     if isinstance(exc, APIStatusError):
-        return f"LM Studio returned HTTP {exc.status_code}: {exc.message}"
-    return f"LM Studio request failed: {exc}"
+        return f"{llm.label} returned HTTP {exc.status_code}: {exc.message}"
+    return f"{llm.label} request failed: {exc}"
 
 
-_HEALTH_CACHE: tuple[float, dict[str, Any]] | None = None
+_HEALTH_CACHE: tuple[float, LlmHealth] | None = None
 _HEALTH_TTL_SECONDS = 20.0
 
 
-def llm_health() -> dict[str, Any]:
-    """Never block a page on LM Studio. Prefer a short HTTP probe over the SDK."""
+def _model_id(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _health_model_message(label: str, model: Any) -> str:
+    name = _model_id(model)
+    return f"{label} · {name}" if name else label
+
+
+def _health(*, ok: bool, provider: str, model: str, message: str) -> LlmHealth:
+    return {
+        "ok": ok,
+        "provider": provider,
+        "model": model,
+        "message": message,
+        "checked_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+    }
+
+
+def llm_health() -> LlmHealth:
+    """Never block a page on the model host. Prefer a short HTTP probe over the SDK."""
     global _HEALTH_CACHE
     now = time.time()
     if _HEALTH_CACHE and now - _HEALTH_CACHE[0] < _HEALTH_TTL_SECONDS:
         return _HEALTH_CACHE[1]
-    if settings.llm_model.strip():
-        fallback = {
-            "ok": True,
-            "model": settings.llm_model.strip(),
-            "message": f"LM Studio · {settings.llm_model.strip()}",
-        }
-    else:
-        fallback = {
-            "ok": True,
-            "model": "",
-            "message": "LM Studio · local",
-        }
+    try:
+        llm = resolve_llm()
+    except ValueError as exc:
+        result = _health(
+            ok=False,
+            provider=settings.llm_provider or DEFAULT_LLM_PROVIDER,
+            model="",
+            message=str(exc),
+        )
+        _HEALTH_CACHE = (now, result)
+        return result
+    configured = _model_id(llm.model)
+    missing = llm.missing_config()
+    if missing:
+        result = _health(ok=False, provider=llm.provider, model=configured, message=missing)
+        _HEALTH_CACHE = (now, result)
+        return result
     try:
         headers = {}
-        if settings.llm_api_key:
-            headers["Authorization"] = f"Bearer {settings.llm_api_key}"
+        if llm.api_key:
+            headers["Authorization"] = f"Bearer {llm.api_key}"
         response = httpx.get(
-            f"{openai_base_url()}/models",
+            f"{llm.base_url}/models",
             headers=headers,
             timeout=httpx.Timeout(0.8, connect=0.4),
         )
@@ -148,24 +216,57 @@ def llm_health() -> dict[str, Any]:
             if isinstance(item, dict) and item.get("id")
         ]
         chat_ids = [item for item in ids if "embed" not in item.lower()]
-        model = settings.llm_model.strip() or (chat_ids[0] if chat_ids else (ids[0] if ids else ""))
-        if not model:
-            result = {
-                "ok": False,
-                "model": "",
-                "message": "LM Studio is running but no model is loaded",
-            }
-        else:
-            result = {"ok": True, "model": model, "message": f"LM Studio · {model}"}
-    except Exception:
-        result = _HEALTH_CACHE[1] if _HEALTH_CACHE else fallback
-        result = dict(result)
-        if not _HEALTH_CACHE:
-            result["ok"] = False
-            result["message"] = (
-                f"Cannot reach LM Studio at {openai_base_url()}. "
-                "Start the local server and load a model."
+        available = chat_ids or ids
+        if configured:
+            if available and configured not in available:
+                result = _health(
+                    ok=False,
+                    provider=llm.provider,
+                    model=configured,
+                    message=(
+                        f"{llm.label} is reachable but {configured} is not available. "
+                        "Set LLM_MODEL to a loaded chat model."
+                    ),
+                )
+            else:
+                result = _health(
+                    ok=True,
+                    provider=llm.provider,
+                    model=configured,
+                    message=_health_model_message(llm.label, configured),
+                )
+        elif not available:
+            result = _health(
+                ok=False,
+                provider=llm.provider,
+                model="",
+                message=(
+                    f"{llm.label} is reachable but no model is available. "
+                    "Set LLM_MODEL or load a model."
+                ),
             )
+        else:
+            model = available[0]
+            result = _health(
+                ok=True,
+                provider=llm.provider,
+                model=model,
+                message=_health_model_message(llm.label, model),
+            )
+    except Exception:
+        result = _health(
+            ok=False,
+            provider=llm.provider,
+            model=configured,
+            message=(
+                f"Cannot reach {llm.label} at {llm.base_url}."
+                + (
+                    " Start the local server and load a model."
+                    if llm.local
+                    else " Check LLM_API_KEY and LLM_BASE_URL."
+                )
+            ),
+        )
     _HEALTH_CACHE = (now, result)
     return result
 
