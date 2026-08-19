@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import re
 import time
+from datetime import datetime, timezone
 from typing import Any, TypedDict
 
 import httpx
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
+from app.config import DEFAULT_LLM_PROVIDER, LOCAL_LLM_API_KEY, settings
 from app.llm_settings import ResolvedLlm, resolve_llm
 from app.schemas import MatchAnalysis, Profile, TailorPack
 
@@ -63,9 +65,21 @@ class LlmHealth(TypedDict):
     provider: str
     model: str
     message: str
+    checked_at: str
+
+
+_RESOLVED_CACHE: ResolvedLlm | None = None
 
 
 def _resolved() -> ResolvedLlm:
+    """Return cached ``resolve_llm()`` or raise ``LLMError`` if config is incomplete.
+
+    Settings come from ``.env`` at process start; a restart is required to pick up changes.
+    Failures are not cached so a later call can succeed after a transient config read.
+    """
+    global _RESOLVED_CACHE
+    if _RESOLVED_CACHE is not None:
+        return _RESOLVED_CACHE
     try:
         llm = resolve_llm()
     except ValueError as exc:
@@ -73,6 +87,7 @@ def _resolved() -> ResolvedLlm:
     missing = llm.missing_config()
     if missing:
         raise LLMError(missing)
+    _RESOLVED_CACHE = llm
     return llm
 
 
@@ -83,7 +98,7 @@ def openai_base_url() -> str:
 def _client(timeout: float | None = None, connect: float = 2.0) -> OpenAI:
     llm = _resolved()
     return OpenAI(
-        api_key=llm.api_key or "lm-studio",
+        api_key=llm.api_key or LOCAL_LLM_API_KEY,
         base_url=llm.base_url,
         timeout=httpx.Timeout(timeout if timeout is not None else llm.timeout, connect=connect),
     )
@@ -151,6 +166,16 @@ def _health_model_message(label: str, model: Any) -> str:
     return f"{label} · {name}" if name else label
 
 
+def _health(*, ok: bool, provider: str, model: str, message: str) -> LlmHealth:
+    return {
+        "ok": ok,
+        "provider": provider,
+        "model": model,
+        "message": message,
+        "checked_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+    }
+
+
 def llm_health() -> LlmHealth:
     """Never block a page on the model host. Prefer a short HTTP probe over the SDK."""
     global _HEALTH_CACHE
@@ -160,23 +185,18 @@ def llm_health() -> LlmHealth:
     try:
         llm = resolve_llm()
     except ValueError as exc:
-        result: LlmHealth = {
-            "ok": False,
-            "provider": "unknown",
-            "model": "",
-            "message": str(exc),
-        }
+        result = _health(
+            ok=False,
+            provider=settings.llm_provider or DEFAULT_LLM_PROVIDER,
+            model="",
+            message=str(exc),
+        )
         _HEALTH_CACHE = (now, result)
         return result
     configured = _model_id(llm.model)
     missing = llm.missing_config()
     if missing:
-        result = {
-            "ok": False,
-            "provider": llm.provider,
-            "model": configured,
-            "message": missing,
-        }
+        result = _health(ok=False, provider=llm.provider, model=configured, message=missing)
         _HEALTH_CACHE = (now, result)
         return result
     try:
@@ -199,57 +219,54 @@ def llm_health() -> LlmHealth:
         available = chat_ids or ids
         if configured:
             if available and configured not in available:
-                result = {
-                    "ok": False,
-                    "provider": llm.provider,
-                    "model": configured,
-                    "message": (
+                result = _health(
+                    ok=False,
+                    provider=llm.provider,
+                    model=configured,
+                    message=(
                         f"{llm.label} is reachable but {configured} is not available. "
                         "Set LLM_MODEL to a loaded chat model."
                     ),
-                }
+                )
             else:
-                result = {
-                    "ok": True,
-                    "provider": llm.provider,
-                    "model": configured,
-                    "message": _health_model_message(llm.label, configured),
-                }
+                result = _health(
+                    ok=True,
+                    provider=llm.provider,
+                    model=configured,
+                    message=_health_model_message(llm.label, configured),
+                )
         elif not available:
-            result = {
-                "ok": False,
-                "provider": llm.provider,
-                "model": "",
-                "message": (
+            result = _health(
+                ok=False,
+                provider=llm.provider,
+                model="",
+                message=(
                     f"{llm.label} is reachable but no model is available. "
                     "Set LLM_MODEL or load a model."
                 ),
-            }
+            )
         else:
             model = available[0]
-            result = {
-                "ok": True,
-                "provider": llm.provider,
-                "model": model,
-                "message": _health_model_message(llm.label, model),
-            }
+            result = _health(
+                ok=True,
+                provider=llm.provider,
+                model=model,
+                message=_health_model_message(llm.label, model),
+            )
     except Exception:
-        if _HEALTH_CACHE:
-            result = _HEALTH_CACHE[1]
-        else:
-            result = {
-                "ok": False,
-                "provider": llm.provider,
-                "model": configured,
-                "message": (
-                    f"Cannot reach {llm.label} at {llm.base_url}."
-                    + (
-                        " Start the local server and load a model."
-                        if llm.local
-                        else " Check LLM_API_KEY and LLM_BASE_URL."
-                    )
-                ),
-            }
+        result = _health(
+            ok=False,
+            provider=llm.provider,
+            model=configured,
+            message=(
+                f"Cannot reach {llm.label} at {llm.base_url}."
+                + (
+                    " Start the local server and load a model."
+                    if llm.local
+                    else " Check LLM_API_KEY and LLM_BASE_URL."
+                )
+            ),
+        )
     _HEALTH_CACHE = (now, result)
     return result
 

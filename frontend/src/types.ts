@@ -16,6 +16,7 @@ export type LlmHealth = {
   provider?: string;
   model: string;
   message: string;
+  checked_at?: string;
 };
 
 export type Health = {

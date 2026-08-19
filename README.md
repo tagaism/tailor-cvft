@@ -161,11 +161,19 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173). With Docker you can skip th
 
 ## LLM providers
 
-All providers use the OpenAI-compatible SDK (`GET /v1/models`, `POST /v1/chat/completions`). Set them in `.env` and restart the API. There is no Settings UI yet.
+All providers use the OpenAI-compatible SDK (`GET /v1/models`, `POST /v1/chat/completions`). Copy [`.env.example`](.env.example) to `.env`, set the three values below, and restart the API. There is no Settings UI yet.
+
+```bash
+LLM_PROVIDER=openai
+LLM_API_KEY=sk-...
+LLM_MODEL=gpt-4o-mini
+```
+
+Same shape for OpenRouter (`LLM_PROVIDER=openrouter`, `LLM_MODEL=openai/gpt-4o-mini`), Groq, or xAI. Do not set `LLM_BASE_URL` unless you use `custom`. An empty `LLM_BASE_URL` keeps the provider default (`http://127.0.0.1:1234/v1` for LM Studio). If an old `.env` still has that localhost URL and you switch to a cloud provider, it is ignored so traffic does not stay on LM Studio.
 
 | `LLM_PROVIDER` | Base URL | Key | Model |
 | --- | --- | --- | --- |
-| `lmstudio` (default) | `http://127.0.0.1:1234/v1` | optional | empty → first loaded chat model |
+| `lmstudio` (default) | `http://127.0.0.1:1234/v1` | optional — empty is fine | empty → first loaded chat model |
 | `openai` | `https://api.openai.com/v1` | required | required |
 | `openrouter` | `https://openrouter.ai/api/v1` | required | required |
 | `groq` | `https://api.groq.com/openai/v1` | required | required |
@@ -176,7 +184,7 @@ All providers use the OpenAI-compatible SDK (`GET /v1/models`, `POST /v1/chat/co
 
 `LLM_TIMEOUT` defaults to 600s for LM Studio and 120s for cloud. In Docker, a local `127.0.0.1` / `localhost` URL is rewritten to `host.docker.internal` so the container can reach LM Studio on the host. Cloud URLs are left alone.
 
-A cloud provider **does** receive your profile and the job text. Keep keys in `.env` (gitignored).
+A cloud provider **does** receive your profile and the job text. Keep keys in `.env` (gitignored). Cloud calls are billed by that provider (usually per token) and may hit rate limits if you build many packs in a short time. LM Studio stays on your machine and has no API bill.
 
 Use the React app at **:5173** (API + Jinja at **:8000**). Opening **:1234** in a browser is LM Studio, not tailor-cvft.
 

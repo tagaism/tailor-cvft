@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Optional
 
@@ -10,6 +11,9 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 APP_DIR = Path(__file__).resolve().parent
 
 DEFAULT_LLM_PROVIDER = "lmstudio"
+DEFAULT_LLM_BASE_URL = "http://127.0.0.1:1234/v1"
+# Dummy string the OpenAI SDK needs for local /v1 hosts. Not a credential.
+LOCAL_LLM_API_KEY = "lm-studio"
 LLM_PROVIDERS = ("lmstudio", "openai", "openrouter", "groq", "xai", "custom")
 
 
@@ -37,7 +41,7 @@ def parse_llm_timeout(value) -> Optional[float]:
         timeout = float(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"LLM_TIMEOUT must be a number of seconds, got {value!r}.") from exc
-    if timeout <= 0 or timeout != timeout:  # NaN
+    if timeout <= 0 or math.isnan(timeout):
         raise ValueError("LLM_TIMEOUT must be greater than 0.")
     return timeout
 
@@ -50,7 +54,9 @@ class Settings(BaseSettings):
     )
 
     llm_provider: str = DEFAULT_LLM_PROVIDER
+    # Empty means "use the provider preset". LM Studio still defaults to DEFAULT_LLM_BASE_URL.
     llm_base_url: str = ""
+    # Empty is fine for LM Studio. The client sends LOCAL_LLM_API_KEY; cloud providers require a real key.
     llm_api_key: str = ""
     llm_model: str = ""
     llm_timeout: Optional[float] = None

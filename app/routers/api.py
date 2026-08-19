@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.config import DEFAULT_LLM_PROVIDER, settings
 from app.db import get_db
 from app.forms import parse_skill_text
 from app.models import Company, Generation, Job
@@ -59,9 +60,10 @@ async def api_health():
         "ok": True,
         "llm": {
             "ok": bool(llm.get("ok")),
-            "provider": llm.get("provider") or "unknown",
+            "provider": llm.get("provider") or settings.llm_provider or DEFAULT_LLM_PROVIDER,
             "model": llm.get("model") or "",
             "message": llm.get("message") or "",
+            "checked_at": llm.get("checked_at") or "",
         },
         "statuses": APPLICATION_STATUSES,
     }
