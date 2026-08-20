@@ -3,11 +3,14 @@ import TextField from "@mui/material/TextField";
 
 function hrefFor(url: string): string | null {
   const raw = url.trim();
-  if (!raw) return null;
+  if (!raw || /[\u0000-\u001F\u007F]/.test(raw)) return null;
+  if (/^(javascript|data|vbscript|file):/i.test(raw)) return null;
   try {
     const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
     const parsed = new URL(withProtocol);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    if (parsed.username || parsed.password) return null;
+    if (!parsed.hostname) return null;
     return parsed.href;
   } catch {
     return null;

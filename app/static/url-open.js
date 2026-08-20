@@ -5,11 +5,14 @@
 
   function hrefFor(url) {
     const raw = (url || "").trim();
-    if (!raw) return "";
+    if (!raw || /[\u0000-\u001F\u007F]/.test(raw)) return "";
+    if (/^(javascript|data|vbscript|file):/i.test(raw)) return "";
     try {
       const withProtocol = /^https?:\/\//i.test(raw) ? raw : "https://" + raw;
       const parsed = new URL(withProtocol);
       if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+      if (parsed.username || parsed.password) return "";
+      if (!parsed.hostname) return "";
       return parsed.href;
     } catch {
       return "";
