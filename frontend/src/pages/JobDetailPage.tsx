@@ -17,6 +17,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { api, apiOrigin } from "../api";
+import OpenableUrlField from "../components/OpenableUrlField";
 import StatusChip from "../components/StatusChip";
 import type { Health, Job } from "../types";
 
@@ -198,7 +199,7 @@ export default function JobDetailPage() {
             />
           </Grid>
           <Grid size={12}>
-            <TextField label="URL" type="url" value={job.url} onChange={(e) => patch("url", e.target.value)} />
+            <OpenableUrlField value={job.url} onChange={(url) => patch("url", url)} />
           </Grid>
           <Grid size={12}>
             <TextField
