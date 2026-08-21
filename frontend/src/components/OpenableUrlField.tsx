@@ -1,6 +1,7 @@
 import { MouseEvent, useEffect, useState } from "react";
 import TextField from "@mui/material/TextField";
 
+/** Only http(s) job links. javascript/data/file URLs must not run or download via window.open. */
 function hrefFor(url: string): string | null {
   const raw = url.trim();
   if (!raw || /[\u0000-\u001F\u007F]/.test(raw)) return null;
@@ -46,6 +47,7 @@ export default function OpenableUrlField({ value, onChange }: Props) {
   }, []);
 
   function openIfModifier(event: MouseEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
     if (!(event.ctrlKey || event.metaKey) || !href) return;
     event.preventDefault();
     window.open(href, "_blank", "noopener,noreferrer");
@@ -60,7 +62,6 @@ export default function OpenableUrlField({ value, onChange }: Props) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={openIfModifier}
-      onContextMenu={openIfModifier}
       title={href ? "Hold Ctrl (⌘ on Mac) while hovering, then click to open in a new tab" : undefined}
       sx={
         clickable

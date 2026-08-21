@@ -3,6 +3,7 @@
   const input = wrap && wrap.querySelector("input");
   if (!wrap || !input) return;
 
+  // Only http(s) job links. javascript/data/file URLs must not run or download via window.open.
   function hrefFor(url) {
     const raw = (url || "").trim();
     if (!raw || /[\u0000-\u001F\u007F]/.test(raw)) return "";
@@ -53,6 +54,7 @@
   input.addEventListener("input", sync);
 
   function openIfModifier(event) {
+    if (event.button !== 0) return;
     if (!(event.ctrlKey || event.metaKey)) return;
     const href = hrefFor(input.value);
     if (!href) return;
@@ -61,5 +63,4 @@
   }
 
   wrap.addEventListener("click", openIfModifier);
-  wrap.addEventListener("contextmenu", openIfModifier);
 })();
