@@ -167,6 +167,12 @@ label { display: block; font-size: 0.82rem; color: var(--muted); margin: 0.7rem 
 .chip.status-rejected { background: var(--err-soft); color: var(--err); }
 .chip.status-declined { background: #e7e5e4; color: #44403c; }
 
+.url-open.is-clickable input {
+  cursor: pointer;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 input[type="text"], input[type="email"], input[type="url"], input[type="file"], select, textarea {
   width: 100%;
   font: inherit;

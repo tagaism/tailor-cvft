@@ -62,8 +62,10 @@
         <input id="company" name="company" type="text" value="{{ job.company_name }}">
       </div>
     </div>
-    <label for="url">URL</label>
-    <input id="url" name="url" type="url" value="{{ job.url }}">
+    <div class="url-open" data-url-open>
+      <label for="url">URL</label>
+      <input id="url" name="url" type="url" value="{{ job.url }}">
+    </div>
 
     <label for="notes">Notes to emphasize</label>
     <textarea id="notes" name="notes">{{ job.notes }}</textarea>
@@ -181,6 +183,7 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
+<script src="/static/url-open.js"></script>
 <script>
   const form = document.getElementById("build-form");
   if (form) {
