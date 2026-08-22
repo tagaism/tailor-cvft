@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import ensure_data_dirs, settings
 from app.db import init_db
-from app.routers import api, companies, jobs, profile
+from app.routers import api, jobs
 
 
 @asynccontextmanager
@@ -30,8 +30,6 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory=str(settings.static_dir)), name="static")
 app.include_router(api.router)
 app.include_router(jobs.router)
-app.include_router(companies.router)
-app.include_router(profile.router)
 
 
 @app.get("/health")
@@ -43,4 +41,4 @@ async def health():
 async def root():
     from fastapi.responses import RedirectResponse
 
-    return RedirectResponse("/jobs", status_code=303)
+    return RedirectResponse("http://127.0.0.1:5173", status_code=303)

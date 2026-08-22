@@ -47,14 +47,7 @@ The default LLM is [LM Studio](https://lmstudio.ai) on your machine. You can poi
 
 LinkedIn and some ATS pages block scraping. The job is still saved — paste the description and continue.
 
-There are two UIs on the same API:
-
-| URL | What |
-| --- | --- |
-| [http://127.0.0.1:5173](http://127.0.0.1:5173) | **React + Material UI** (use this) |
-| [http://127.0.0.1:8000](http://127.0.0.1:8000) | Original Jinja pages (still work) |
-
-The Times CV / cover letter preview is the same HTML on both. React embeds it; click-to-edit still saves on blur.
+The app UI is React + Material UI at [http://127.0.0.1:5173](http://127.0.0.1:5173). FastAPI on [http://127.0.0.1:8000](http://127.0.0.1:8000) is JSON plus Times CV / cover letter HTML (embedded in React; click-to-edit still saves on blur).
 
 ## Tour
 
@@ -63,7 +56,7 @@ The Times CV / cover letter preview is the same HTML on both. React embeds it; c
 /jobs/{id}       Source + status + Build tailored pack + results
 /companies       Employers (created when you name a company)
 /profile         Contact, experience, upload PDF / DOCX / TXT
-/api/...         JSON for the React app (health, jobs, profile, companies)
+/api/...         JSON API (health, jobs, profile, companies)
 /health          Liveness probe (used by Docker)
 ```
 
@@ -87,7 +80,7 @@ mkdir -p data
 docker compose up --build
 ```
 
-4. Open the React UI at [http://127.0.0.1:5173](http://127.0.0.1:5173). The API / Jinja pages stay at [http://127.0.0.1:8000](http://127.0.0.1:8000).
+4. Open the app at [http://127.0.0.1:5173](http://127.0.0.1:5173). The API stays at [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
 Compose starts both containers. Nginx on **5173** serves the built React app and proxies `/api`, `/static`, health, previews, and PDFs to `web`. Build-pack requests can take up to 10 minutes.
 
@@ -138,7 +131,7 @@ Start LM Studio on `http://127.0.0.1:1234`, then:
 uvicorn app.main:app --reload
 ```
 
-The API is [http://127.0.0.1:8000](http://127.0.0.1:8000). LM Studio stays at `http://127.0.0.1:1234/v1` unless you set another provider in `.env`.
+The API is [http://127.0.0.1:8000](http://127.0.0.1:8000) (JSON, CV preview, PDFs). LM Studio stays at `http://127.0.0.1:1234/v1` unless you set another provider in `.env`.
 
 Then start the React UI (Vite, with hot reload):
 
@@ -186,7 +179,7 @@ Same shape for OpenRouter (`LLM_PROVIDER=openrouter`, `LLM_MODEL=openai/gpt-4o-m
 
 A cloud provider **does** receive your profile and the job text. Keep keys in `.env` (gitignored). Cloud calls are billed by that provider (usually per token) and may hit rate limits if you build many packs in a short time. LM Studio stays on your machine and has no API bill.
 
-Use the React app at **:5173** (API + Jinja at **:8000**). Opening **:1234** in a browser is LM Studio, not tailor-cvft.
+Use the app at **:5173** (API at **:8000**). Opening **:1234** in a browser is LM Studio, not tailor-cvft.
 
 On the tailored CV or cover letter, click to edit. **B** / **I** (or Ctrl/Cmd+B and Ctrl/Cmd+I) apply bold and italic. Click outside to save. Downloads pick up those edits.
 
@@ -204,7 +197,7 @@ If JSON is cut off mid-stream (Gemma sometimes spends a minute reasoning first),
 ## Stack
 
 ```
-FastAPI  →  JSON /api + Jinja pages + PDF
+FastAPI  →  JSON /api + Times CV/letter HTML + PDF
 React + MUI (Vite)  →  product UI on :5173
 SQLite (jobs, companies, generations)
 profile.json + uploads under ./data   ← gitignored
@@ -216,9 +209,9 @@ Docker Compose  →  API (`web`) + React nginx (`ui`)
 
 ```
 app/
-  routers/     api · jobs · companies · profile
+  routers/     api · jobs (preview, PDF, click-to-edit)
   services/    llm · scraper · pdf · parser · merge
-  templates/   Jinja pages + Times CV / letter preview
+  templates/   Times CV / letter preview
   schemas.py   Profile, Position, Company, ApplicationStatus
 frontend/      Vite + React + Material UI + nginx image
 Dockerfile
