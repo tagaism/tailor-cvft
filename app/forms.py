@@ -1,3 +1,9 @@
+"""Job skill-field helpers for the JSON API.
+
+Profile create/update is ``PUT /api/profile`` with a Pydantic ``Profile`` body.
+The old HTML ``profile_from_form`` path was removed with the Jinja UI.
+"""
+
 from __future__ import annotations
 
 

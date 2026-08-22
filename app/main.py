@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.config import ensure_data_dirs, settings
+from app.config import DEFAULT_UI_ORIGIN, ensure_data_dirs, settings
 from app.db import init_db
 from app.routers import api, jobs
 
@@ -17,12 +17,14 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="tailor-cvft", lifespan=lifespan)
+_cors_origins = {
+    DEFAULT_UI_ORIGIN,
+    "http://localhost:5173",
+    settings.ui_origin,
+}
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-    ],
+    allow_origins=sorted(_cors_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,4 +43,4 @@ async def health():
 async def root():
     from fastapi.responses import RedirectResponse
 
-    return RedirectResponse("http://127.0.0.1:5173", status_code=303)
+    return RedirectResponse(settings.ui_origin, status_code=303)
