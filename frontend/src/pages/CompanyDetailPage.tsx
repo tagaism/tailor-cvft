@@ -33,12 +33,20 @@ export default function CompanyDetailPage() {
 
   useEffect(() => {
     if (companyId == null) return;
+    let cancelled = false;
     setError("");
     setCompany(null);
     api
       .company(companyId)
-      .then(setCompany)
-      .catch((err: Error) => setError(err.message || "Company not found."));
+      .then((data) => {
+        if (!cancelled) setCompany(data);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message || "Company not found.");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [companyId]);
 
   async function onSave(event: FormEvent) {

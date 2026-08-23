@@ -40,12 +40,20 @@ export default function JobDetailPage() {
 
   useEffect(() => {
     if (jobId == null) return;
+    let cancelled = false;
     setError("");
     setJob(null);
     api
       .job(jobId)
-      .then(setJob)
-      .catch((err: Error) => setError(err.message || "Job not found."));
+      .then((data) => {
+        if (!cancelled) setJob(data);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message || "Job not found.");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [jobId]);
 
   function patch<K extends keyof Job>(key: K, value: Job[K]) {
