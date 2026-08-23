@@ -16,14 +16,15 @@ import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { api, apiOrigin } from "../api";
+import { ApiError, api, apiOrigin } from "../api";
 import OpenableUrlField from "../components/OpenableUrlField";
 import StatusChip from "../components/StatusChip";
+import { JOB_NOT_FOUND, parseRouteId } from "../ids";
 import type { Health, Job } from "../types";
 
 export default function JobDetailPage() {
   const { id } = useParams();
-  const jobId = Number(id);
+  const jobId = parseRouteId(id);
   const navigate = useNavigate();
   const [job, setJob] = useState<Job | null>(null);
   const [statuses, setStatuses] = useState<Health["statuses"]>([]);
@@ -38,11 +39,23 @@ export default function JobDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (!jobId) return;
+    if (jobId == null) return;
+    let cancelled = false;
+    setError("");
+    setJob(null);
     api
       .job(jobId)
-      .then(setJob)
-      .catch((err: Error) => setError(err.message));
+      .then((data) => {
+        if (!cancelled) setJob(data);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setError(err instanceof ApiError && err.status === 404 ? JOB_NOT_FOUND : err.message || JOB_NOT_FOUND);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [jobId]);
 
   function patch<K extends keyof Job>(key: K, value: Job[K]) {
@@ -110,14 +123,27 @@ export default function JobDetailPage() {
     navigate("/jobs");
   }
 
-  if (!job && !error) {
+  if (jobId == null) {
+    return (
+      <Alert severity="error">
+        {JOB_NOT_FOUND} <RouterLink to="/jobs">Back to positions</RouterLink>
+      </Alert>
+    );
+  }
+  if (!job && error) {
+    return (
+      <Alert severity="error">
+        {error} <RouterLink to="/jobs">Back to positions</RouterLink>
+      </Alert>
+    );
+  }
+  if (!job) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
         <CircularProgress />
       </Box>
     );
   }
-  if (!job) return <Alert severity="error">{error || "Job not found."}</Alert>;
 
   const match = job.generation?.match;
   const canBuild = Boolean(job.profile_ready && job.source_text.trim());
