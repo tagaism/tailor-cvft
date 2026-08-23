@@ -16,9 +16,9 @@ import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { api } from "../api";
+import { ApiError, api } from "../api";
 import StatusChip from "../components/StatusChip";
-import { parseRouteId } from "../ids";
+import { COMPANY_NOT_FOUND, parseRouteId } from "../ids";
 import type { Company } from "../types";
 
 export default function CompanyDetailPage() {
@@ -42,7 +42,11 @@ export default function CompanyDetailPage() {
         if (!cancelled) setCompany(data);
       })
       .catch((err: Error) => {
-        if (!cancelled) setError(err.message || "Company not found.");
+        if (!cancelled) {
+          setError(
+            err instanceof ApiError && err.status === 404 ? COMPANY_NOT_FOUND : err.message || COMPANY_NOT_FOUND,
+          );
+        }
       });
     return () => {
       cancelled = true;
@@ -85,7 +89,7 @@ export default function CompanyDetailPage() {
   if (companyId == null) {
     return (
       <Alert severity="error">
-        Company not found. <RouterLink to="/companies">Back to companies</RouterLink>
+        {COMPANY_NOT_FOUND} <RouterLink to="/companies">Back to companies</RouterLink>
       </Alert>
     );
   }

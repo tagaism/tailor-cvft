@@ -16,10 +16,10 @@ import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import { api, apiOrigin } from "../api";
+import { ApiError, api, apiOrigin } from "../api";
 import OpenableUrlField from "../components/OpenableUrlField";
 import StatusChip from "../components/StatusChip";
-import { parseRouteId } from "../ids";
+import { JOB_NOT_FOUND, parseRouteId } from "../ids";
 import type { Health, Job } from "../types";
 
 export default function JobDetailPage() {
@@ -49,7 +49,9 @@ export default function JobDetailPage() {
         if (!cancelled) setJob(data);
       })
       .catch((err: Error) => {
-        if (!cancelled) setError(err.message || "Job not found.");
+        if (!cancelled) {
+          setError(err instanceof ApiError && err.status === 404 ? JOB_NOT_FOUND : err.message || JOB_NOT_FOUND);
+        }
       });
     return () => {
       cancelled = true;
@@ -124,7 +126,7 @@ export default function JobDetailPage() {
   if (jobId == null) {
     return (
       <Alert severity="error">
-        Job not found. <RouterLink to="/jobs">Back to positions</RouterLink>
+        {JOB_NOT_FOUND} <RouterLink to="/jobs">Back to positions</RouterLink>
       </Alert>
     );
   }
