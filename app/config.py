@@ -12,6 +12,7 @@ APP_DIR = Path(__file__).resolve().parent
 
 DEFAULT_LLM_PROVIDER = "lmstudio"
 DEFAULT_LLM_BASE_URL = "http://127.0.0.1:1234/v1"
+DEFAULT_UI_ORIGIN = "http://127.0.0.1:5173"
 # Dummy string the OpenAI SDK needs for local /v1 hosts. Not a credential.
 LOCAL_LLM_API_KEY = "lm-studio"
 LLM_PROVIDERS = ("lmstudio", "openai", "openrouter", "groq", "xai", "custom")
@@ -61,6 +62,7 @@ class Settings(BaseSettings):
     llm_model: str = ""
     llm_timeout: Optional[float] = None
     llm_in_docker: bool = False
+    ui_origin: str = DEFAULT_UI_ORIGIN
     data_dir: Path = ROOT_DIR / "data"
 
     @field_validator("llm_provider", mode="before")
@@ -72,6 +74,12 @@ class Settings(BaseSettings):
     @classmethod
     def _validate_timeout(cls, value):
         return parse_llm_timeout(value)
+
+    @field_validator("ui_origin", mode="before")
+    @classmethod
+    def _normalize_ui_origin(cls, value):
+        origin = (value or DEFAULT_UI_ORIGIN).strip().rstrip("/")
+        return origin or DEFAULT_UI_ORIGIN
 
     @property
     def db_path(self) -> Path:
