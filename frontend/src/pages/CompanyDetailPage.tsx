@@ -18,11 +18,12 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { api } from "../api";
 import StatusChip from "../components/StatusChip";
+import { parseRouteId } from "../ids";
 import type { Company } from "../types";
 
 export default function CompanyDetailPage() {
   const { id } = useParams();
-  const companyId = Number(id);
+  const companyId = parseRouteId(id);
   const navigate = useNavigate();
   const [company, setCompany] = useState<Company | null>(null);
   const [error, setError] = useState("");
@@ -31,11 +32,13 @@ export default function CompanyDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
-    if (!companyId) return;
+    if (companyId == null) return;
+    setError("");
+    setCompany(null);
     api
       .company(companyId)
       .then(setCompany)
-      .catch((err: Error) => setError(err.message));
+      .catch((err: Error) => setError(err.message || "Company not found."));
   }, [companyId]);
 
   async function onSave(event: FormEvent) {
@@ -71,8 +74,21 @@ export default function CompanyDetailPage() {
     }
   }
 
-  if (!company && !error) return <Typography color="text.secondary">Loading…</Typography>;
-  if (!company) return <Alert severity="error">{error || "Company not found."}</Alert>;
+  if (companyId == null) {
+    return (
+      <Alert severity="error">
+        Company not found. <RouterLink to="/companies">Back to companies</RouterLink>
+      </Alert>
+    );
+  }
+  if (!company && error) {
+    return (
+      <Alert severity="error">
+        {error} <RouterLink to="/companies">Back to companies</RouterLink>
+      </Alert>
+    );
+  }
+  if (!company) return <Typography color="text.secondary">Loading…</Typography>;
 
   return (
     <Stack spacing={3}>

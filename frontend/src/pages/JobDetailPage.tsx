@@ -19,11 +19,12 @@ import Typography from "@mui/material/Typography";
 import { api, apiOrigin } from "../api";
 import OpenableUrlField from "../components/OpenableUrlField";
 import StatusChip from "../components/StatusChip";
+import { parseRouteId } from "../ids";
 import type { Health, Job } from "../types";
 
 export default function JobDetailPage() {
   const { id } = useParams();
-  const jobId = Number(id);
+  const jobId = parseRouteId(id);
   const navigate = useNavigate();
   const [job, setJob] = useState<Job | null>(null);
   const [statuses, setStatuses] = useState<Health["statuses"]>([]);
@@ -38,11 +39,13 @@ export default function JobDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (!jobId) return;
+    if (jobId == null) return;
+    setError("");
+    setJob(null);
     api
       .job(jobId)
       .then(setJob)
-      .catch((err: Error) => setError(err.message));
+      .catch((err: Error) => setError(err.message || "Job not found."));
   }, [jobId]);
 
   function patch<K extends keyof Job>(key: K, value: Job[K]) {
@@ -110,14 +113,27 @@ export default function JobDetailPage() {
     navigate("/jobs");
   }
 
-  if (!job && !error) {
+  if (jobId == null) {
+    return (
+      <Alert severity="error">
+        Job not found. <RouterLink to="/jobs">Back to positions</RouterLink>
+      </Alert>
+    );
+  }
+  if (!job && error) {
+    return (
+      <Alert severity="error">
+        {error} <RouterLink to="/jobs">Back to positions</RouterLink>
+      </Alert>
+    );
+  }
+  if (!job) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
         <CircularProgress />
       </Box>
     );
   }
-  if (!job) return <Alert severity="error">{error || "Job not found."}</Alert>;
 
   const match = job.generation?.match;
   const canBuild = Boolean(job.profile_ready && job.source_text.trim());
