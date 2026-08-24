@@ -20,7 +20,7 @@ import { ApiError, api, apiOrigin } from "../api";
 import OpenableUrlField from "../components/OpenableUrlField";
 import StatusChip from "../components/StatusChip";
 import { JOB_NOT_FOUND, parseRouteId } from "../ids";
-import type { Health, Job } from "../types";
+import type { CvStyle, Health, Job } from "../types";
 
 export default function JobDetailPage() {
   const { id } = useParams();
@@ -33,6 +33,7 @@ export default function JobDetailPage() {
   const [saving, setSaving] = useState(false);
   const [building, setBuilding] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [cvStyle, setCvStyle] = useState<CvStyle>("times");
 
   useEffect(() => {
     api.health().then((data) => setStatuses(data.statuses)).catch(() => undefined);
@@ -46,7 +47,11 @@ export default function JobDetailPage() {
     api
       .job(jobId)
       .then((data) => {
-        if (!cancelled) setJob(data);
+        if (cancelled) return;
+        setJob(data);
+        if (data.generation?.cv_style === "shokumu" || data.generation?.cv_style === "times") {
+          setCvStyle(data.generation.cv_style);
+        }
       })
       .catch((err: Error) => {
         if (!cancelled) {
@@ -96,7 +101,7 @@ export default function JobDetailPage() {
     setError("");
     setFlash("");
     try {
-      const built = await api.buildJob(job.id);
+      const built = await api.buildJob(job.id, cvStyle);
       setJob(built);
       setFlash("Tailored pack is ready below.");
     } catch (err) {
@@ -286,8 +291,23 @@ export default function JobDetailPage() {
         <Typography color="text.secondary" sx={{ my: 1 }}>
           Uses your saved profile and this job text. Local models often take 3–10 minutes. Leave this tab open.
         </Typography>
+        <TextField
+          select
+          label="CV style"
+          value={cvStyle}
+          onChange={(e) => setCvStyle(e.target.value as CvStyle)}
+          sx={{ maxWidth: 360, mb: 2 }}
+        >
+          <MenuItem value="times">Times CV (English)</MenuItem>
+          <MenuItem value="shokumu">職務経歴書 (Japanese)</MenuItem>
+        </TextField>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>
+          {cvStyle === "shokumu"
+            ? "Writes a 職務経歴書 and 志望動機 in Japanese from your English profile. Facts only."
+            : "Writes a Times-style CV and English cover letter."}
+        </Typography>
         <Button variant="contained" onClick={onBuild} disabled={!canBuild || building} startIcon={building ? <CircularProgress size={16} /> : undefined}>
-          {building ? "LM Studio is writing…" : "Build tailored pack"}
+          {building ? "Writing…" : "Build tailored pack"}
         </Button>
       </Paper>
 
@@ -357,7 +377,9 @@ export default function JobDetailPage() {
           <Paper sx={{ p: 2.5 }}>
             <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1} sx={{ mb: 1 }}>
               <Box>
-                <Typography variant="h2">Tailored CV</Typography>
+                <Typography variant="h2">
+                  {job.generation.cv_style === "shokumu" ? "職務経歴書" : "Tailored CV"}
+                </Typography>
                 <Typography color="text.secondary">
                   Click the intro or a bullet in the preview to edit. Use B / I. Click outside to save.
                 </Typography>
@@ -374,7 +396,7 @@ export default function JobDetailPage() {
             <Box
               component="iframe"
               title="Tailored CV"
-              src={`${apiOrigin}/jobs/${job.id}/preview`}
+              src={`${apiOrigin}/jobs/${job.id}/preview?g=${job.generation.id}`}
               sx={{ width: "100%", height: 900, border: 0, bgcolor: "background.default" }}
             />
           </Paper>
@@ -382,7 +404,7 @@ export default function JobDetailPage() {
           <Paper sx={{ p: 2.5 }}>
             <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1} sx={{ mb: 1 }}>
               <Box>
-                <Typography variant="h2">Cover letter</Typography>
+                <Typography variant="h2">{job.generation.cv_style === "shokumu" ? "志望動機" : "Cover letter"}</Typography>
                 <Typography color="text.secondary">
                   Click the letter to edit. Use B / I. Click outside to save.
                 </Typography>
@@ -404,7 +426,7 @@ export default function JobDetailPage() {
             <Box
               component="iframe"
               title="Cover letter"
-              src={`${apiOrigin}/jobs/${job.id}/cover-letter`}
+              src={`${apiOrigin}/jobs/${job.id}/cover-letter?g=${job.generation.id}`}
               sx={{ width: "100%", height: 640, border: 0, bgcolor: "background.default" }}
             />
           </Paper>

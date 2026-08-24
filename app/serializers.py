@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from app.models import Company, Generation, Job
-from app.schemas import MatchAnalysis, Profile
+from app.schemas import CvStyle, MatchAnalysis, Profile, ShokumuCv
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -43,18 +43,25 @@ def job_payload(job: Job, *, detail: bool = False) -> dict:
 def generation_payload(generation: Generation | None) -> dict | None:
     if generation is None:
         return None
+    style = generation.cv_style or CvStyle.times.value
     try:
-        cv = Profile.model_validate(generation.cv_json or {})
         match = MatchAnalysis.model_validate(generation.match_json or {})
     except Exception:
-        cv = Profile()
         match = MatchAnalysis()
+    try:
+        if style == CvStyle.shokumu.value:
+            cv = ShokumuCv.model_validate(generation.cv_json or {}).model_dump()
+        else:
+            cv = Profile.model_validate(generation.cv_json or {}).model_dump()
+    except Exception:
+        cv = ShokumuCv().model_dump() if style == CvStyle.shokumu.value else Profile().model_dump()
     return {
         "id": generation.id,
         "created_at": _iso(generation.created_at),
         "model_name": generation.model_name,
+        "cv_style": style,
         "cover_letter": generation.cover_letter,
-        "cv": cv.model_dump(),
+        "cv": cv,
         "match": match.model_dump(),
     }
 

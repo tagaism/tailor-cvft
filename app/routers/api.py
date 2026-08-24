@@ -14,10 +14,10 @@ from app.db import get_db
 from app.forms import parse_skill_text
 from app.models import Company, Generation, Job
 from app.profile_store import load_profile, save_profile
-from app.schemas import APPLICATION_STATUSES, ApplicationStatus, Profile
+from app.schemas import APPLICATION_STATUSES, ApplicationStatus, CvStyle, Profile
 from app.serializers import company_payload, job_payload
 from app.services.companies import apply_status, get_or_create_company, link_job_company, normalize_company_name
-from app.services.llm import LLMError, extract_profile_from_cv, llm_health, tailor_pack
+from app.services.llm import LLMError, extract_profile_from_cv, llm_health, tailor_pack, tailor_shokumu_pack
 from app.services.merge import merge_profiles
 from app.services.parser import ParseError, extract_text
 from app.services.scraper import fetch_job
@@ -222,7 +222,7 @@ async def api_refetch_job(job_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/jobs/{job_id}/build")
-async def api_build_job(job_id: int, db: Session = Depends(get_db)):
+async def api_build_job(job_id: int, style: str = CvStyle.times.value, db: Session = Depends(get_db)):
     job = db.get(Job, job_id)
     if job is None:
         _error("Job not found.", 404)
@@ -231,9 +231,13 @@ async def api_build_job(job_id: int, db: Session = Depends(get_db)):
         _error("Fill your profile (name plus experience, skills, or education) before building.")
     if not job.source_text.strip():
         _error("This job has no description yet. Paste the posting text and save.")
+    style = (style or CvStyle.times.value).strip()
+    if style not in {item.value for item in CvStyle}:
+        _error("Unknown CV style. Use times or shokumu.")
+    tailor = tailor_shokumu_pack if style == CvStyle.shokumu.value else tailor_pack
     try:
         pack, model = await asyncio.to_thread(
-            tailor_pack,
+            tailor,
             profile,
             job.source_text,
             job.notes,
@@ -250,6 +254,7 @@ async def api_build_job(job_id: int, db: Session = Depends(get_db)):
         cover_letter=pack.cover_letter,
         match_json=pack.match.model_dump(),
         model_name=model,
+        cv_style=style,
     )
     db.add(generation)
     job.updated_at = datetime.now(timezone.utc)

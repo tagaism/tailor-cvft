@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import re
 from io import BytesIO
+from pathlib import Path
 
 from fpdf import FPDF
 
+from app.config import settings
 from app.cv_layout import contact_bits, role_dates, skill_lines
 from app.richtext import letter_html, rich_tokens
-from app.schemas import Profile
+from app.schemas import Profile, ShokumuCv
 
 
 class ResumePDF(FPDF):
@@ -22,9 +24,20 @@ def html_to_pdf(
     letter: str = "",
     job_title: str = "",
     company: str = "",
+    shokumu: ShokumuCv | None = None,
+    japanese_letter: bool = False,
 ) -> bytes:
+    if shokumu is not None and not letter:
+        return shokumu_to_pdf(shokumu)
     if letter:
-        return letter_to_pdf(cv or Profile(), letter, job_title, company)
+        return letter_to_pdf(
+            cv or Profile(),
+            letter,
+            job_title,
+            company,
+            japanese=japanese_letter or shokumu is not None,
+            sender_name=(shokumu.name if shokumu else ""),
+        )
     if cv is None:
         raise ValueError("A structured CV is required to build a PDF.")
     return cv_to_pdf(cv)
@@ -209,7 +222,17 @@ def cv_to_pdf(cv: Profile) -> bytes:
     return buffer.getvalue()
 
 
-def letter_to_pdf(cv: Profile, letter: str, job_title: str = "", company: str = "") -> bytes:
+def letter_to_pdf(
+    cv: Profile,
+    letter: str,
+    job_title: str = "",
+    company: str = "",
+    *,
+    japanese: bool = False,
+    sender_name: str = "",
+) -> bytes:
+    if japanese:
+        return _japanese_letter_pdf(cv, letter, job_title, company, sender_name)
     pdf = ResumePDF(format="Letter")
     pdf.set_margins(20, 20, 20)
     pdf.set_auto_page_break(auto=True, margin=18)
@@ -221,6 +244,154 @@ def letter_to_pdf(cv: Profile, letter: str, job_title: str = "", company: str = 
         _write(pdf, " | ".join(part for part in [job_title, company] if part), height=5, size=10)
     pdf.ln(6)
     _write_rich(pdf, letter_html(letter), prefix="", height=6, size=12, br_extra=2.5)
+    buffer = BytesIO()
+    pdf.output(buffer)
+    return buffer.getvalue()
+
+
+_JP_FONT_URL = "https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-jp@5.2.5/japanese-400-normal.ttf"
+
+
+def _ensure_jp_font() -> Path:
+    folder = settings.data_dir / "fonts"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "NotoSansJP-Regular.ttf"
+    if path.exists() and path.stat().st_size > 10_000:
+        return path
+    import httpx
+
+    response = httpx.get(_JP_FONT_URL, follow_redirects=True, timeout=60)
+    response.raise_for_status()
+    path.write_bytes(response.content)
+    return path
+
+
+def _plain(text: str) -> str:
+    return re.sub(r"<[^>]+>", "", text or "").replace("&nbsp;", " ").strip()
+
+
+def _bind_jp(pdf: FPDF) -> None:
+    font = _ensure_jp_font()
+    pdf.add_font("JP", "", str(font))
+    pdf.add_font("JP", "B", str(font))
+    pdf.add_font("JP", "I", str(font))
+
+
+def _write_jp(
+    pdf: FPDF,
+    text: str,
+    *,
+    style: str = "",
+    size: float = 11,
+    height: float = 5.5,
+    indent: float = 0,
+    align: str = "L",
+) -> None:
+    pdf.set_font("JP", style, size)
+    pdf.set_x(pdf.l_margin + indent)
+    width = pdf.w - pdf.l_margin - pdf.r_margin - indent
+    pdf.multi_cell(width, height, text or "", align=align, new_x="LMARGIN", new_y="NEXT")
+
+
+def _span(start: str, end: str) -> str:
+    if start and end:
+        return f"{start}〜{end}"
+    return start or end or ""
+
+
+def shokumu_to_pdf(cv: ShokumuCv) -> bytes:
+    pdf = ResumePDF(format="A4")
+    pdf.set_margins(16, 14, 16)
+    pdf.set_auto_page_break(auto=True, margin=14)
+    _bind_jp(pdf)
+    pdf.add_page()
+    pdf.set_text_color(0, 0, 0)
+    _write_jp(pdf, "職　務　経　歴　書", style="B", size=16, height=8, align="C")
+    if cv.as_of:
+        _write_jp(pdf, cv.as_of, size=9, height=5, align="R")
+    _write_jp(pdf, f"氏名　{cv.name}" if cv.name else "", style="B", size=12, height=7)
+    pdf.ln(2)
+    if cv.summary:
+        _write_jp(pdf, "【職務要約】", style="B", size=12, height=7)
+        _write_jp(pdf, _plain(cv.summary), size=10, height=5.2)
+        pdf.ln(1.5)
+    if cv.employers:
+        _write_jp(pdf, "【職務経歴】", style="B", size=12, height=7)
+        for employer in cv.employers:
+            span = _span(employer.start, employer.end or "現在")
+            _write_jp(pdf, f"{span}　　{employer.company}", style="B", size=10, height=5.5)
+            line = "　".join(part for part in [employer.business and f"事業内容：{employer.business}", employer.employment_type] if part)
+            if line:
+                _write_jp(pdf, line, size=10, height=5)
+            facts = [
+                employer.capital and f"資本金：{employer.capital}",
+                employer.revenue and f"売上高：{employer.revenue}",
+                employer.employees and f"従業員数：{employer.employees}",
+                employer.listing and f"上場：{employer.listing}",
+            ]
+            fact_line = "　".join(part for part in facts if part)
+            if fact_line:
+                _write_jp(pdf, fact_line, size=9, height=5)
+            for item in employer.assignments:
+                _write_jp(pdf, _span(item.start, item.end or "現在"), style="B", size=10, height=5)
+                if item.department:
+                    _write_jp(pdf, item.department, size=10, height=5)
+                if item.duties:
+                    _write_jp(pdf, "【職務内容】", style="B", size=10, height=5)
+                    _write_jp(pdf, _plain(item.duties), size=10, height=5.2, indent=3)
+                if item.points:
+                    _write_jp(pdf, "【ポイント】", style="B", size=10, height=5)
+                    _write_jp(pdf, _plain(item.points), size=10, height=5.2, indent=3)
+            pdf.ln(1.4)
+    if cv.pc_skills:
+        _write_jp(pdf, "【PCスキル】", style="B", size=12, height=7)
+        for skill in cv.pc_skills:
+            if not skill.name:
+                continue
+            line = skill.name if not skill.level else f"{skill.name}　{skill.level}"
+            _write_jp(pdf, line, size=10, height=5.2)
+        pdf.ln(1.2)
+    if cv.certifications:
+        _write_jp(pdf, "【資格】", style="B", size=12, height=7)
+        for cert in cv.certifications:
+            if not cert.name:
+                continue
+            line = cert.name if not cert.date else f"{cert.name}　{cert.date}取得"
+            _write_jp(pdf, line, size=10, height=5.2)
+        pdf.ln(1.2)
+    if cv.self_pr:
+        _write_jp(pdf, "【自己ＰＲ】", style="B", size=12, height=7)
+        _write_jp(pdf, _plain(cv.self_pr), size=10, height=5.2)
+        pdf.ln(2)
+    _write_jp(pdf, "以上", size=10, height=6, align="R")
+    buffer = BytesIO()
+    pdf.output(buffer)
+    return buffer.getvalue()
+
+
+def _japanese_letter_pdf(
+    cv: Profile,
+    letter: str,
+    job_title: str,
+    company: str,
+    sender_name: str,
+) -> bytes:
+    pdf = ResumePDF(format="A4")
+    pdf.set_margins(18, 18, 18)
+    pdf.set_auto_page_break(auto=True, margin=16)
+    _bind_jp(pdf)
+    pdf.add_page()
+    name = sender_name or cv.contact.full_name
+    _write_jp(pdf, name, style="B", size=13, height=7)
+    bits = [cv.contact.email, cv.contact.phone, cv.contact.location]
+    line = " · ".join(bit for bit in bits if bit)
+    if line:
+        _write_jp(pdf, line, size=9, height=5)
+    if job_title or company:
+        _write_jp(pdf, " · ".join(part for part in [job_title, company] if part), size=9, height=5)
+    pdf.ln(4)
+    _write_jp(pdf, "志望動機", style="B", size=12, height=7)
+    _write_jp(pdf, _plain(letter_html(letter)), size=11, height=6)
     buffer = BytesIO()
     pdf.output(buffer)
     return buffer.getvalue()

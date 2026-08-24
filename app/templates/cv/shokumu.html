@@ -1,0 +1,118 @@
+{% if standalone %}
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>{{ cv.name or '職務経歴書' }}</title>
+  <link rel="stylesheet" href="/static/cv.css">
+</head>
+<body class="cv-page">
+{% endif %}
+<article class="shokumu"{% if job %} data-job-id="{{ job.id }}"{% endif %}>
+  <header class="shokumu-header">
+    <h1>職　務　経　歴　書</h1>
+    {% if cv.as_of %}<p class="as-of">{{ cv.as_of }}</p>{% endif %}
+    <p class="name">氏名　<span class="cv-edit" data-path="name">{{ cv.name }}</span></p>
+  </header>
+
+  {% if cv.summary %}
+  <section>
+    <h2>■職務要約</h2>
+    <div class="block cv-edit" data-path="summary">{{ cv.summary | rich | safe }}</div>
+  </section>
+  {% endif %}
+
+  {% if cv.employers %}
+  <section>
+    <h2>■職務経歴</h2>
+    {% for employer in cv.employers %}
+    {% set ei = loop.index0 %}
+    <div class="employer">
+      <p class="employer-head">
+        {{ employer.start }}{% if employer.start or employer.end %} 〜 {% endif %}{{ employer.end or '現在' }}
+        <span class="cv-edit" data-path="employers.{{ ei }}.company">{{ employer.company }}</span>
+      </p>
+      <p class="employer-meta">
+        {% if employer.business %}事業内容：<span class="cv-edit" data-path="employers.{{ ei }}.business">{{ employer.business }}</span>{% endif %}
+        {% if employer.employment_type %}<span class="emp-type">{{ employer.employment_type }}</span>{% endif %}
+      </p>
+      {% if employer.capital or employer.revenue or employer.employees or employer.listing %}
+      <p class="employer-facts">
+        {% if employer.capital %}資本金：{{ employer.capital }}　{% endif %}
+        {% if employer.revenue %}売上高：{{ employer.revenue }}　{% endif %}
+        {% if employer.employees %}従業員数：{{ employer.employees }}　{% endif %}
+        {% if employer.listing %}上場：{{ employer.listing }}{% endif %}
+      </p>
+      {% endif %}
+
+      {% for item in employer.assignments %}
+      <table class="duty-table">
+        <tr>
+          <th>期間</th>
+          <th>職務内容</th>
+        </tr>
+        <tr>
+          <td class="period">{{ item.start }}{% if item.start or item.end %}<br>〜<br>{% endif %}{{ item.end or '現在' }}</td>
+          <td>
+            {% if item.department %}<p class="dept cv-edit" data-path="employers.{{ ei }}.assignments.{{ loop.index0 }}.department">{{ item.department }}</p>{% endif %}
+            {% if item.duties %}
+            <p class="label">【職務内容】</p>
+            <div class="block cv-edit" data-path="employers.{{ ei }}.assignments.{{ loop.index0 }}.duties">{{ item.duties | rich | safe }}</div>
+            {% endif %}
+            {% if item.points %}
+            <p class="label">【ポイント】</p>
+            <div class="block cv-edit" data-path="employers.{{ ei }}.assignments.{{ loop.index0 }}.points">{{ item.points | rich | safe }}</div>
+            {% endif %}
+          </td>
+        </tr>
+      </table>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if cv.pc_skills %}
+  <section>
+    <h2>■PCスキル</h2>
+    <table class="skill-table">
+      {% for skill in cv.pc_skills %}
+      <tr>
+        <th class="cv-edit" data-path="pc_skills.{{ loop.index0 }}.name">{{ skill.name }}</th>
+        <td class="cv-edit" data-path="pc_skills.{{ loop.index0 }}.level">{{ skill.level }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </section>
+  {% endif %}
+
+  {% if cv.certifications %}
+  <section>
+    <h2>■資格</h2>
+    <table class="skill-table">
+      {% for cert in cv.certifications %}
+      <tr>
+        <td class="cv-edit" data-path="certifications.{{ loop.index0 }}.name">{{ cert.name }}</td>
+        <td class="date">{% if cert.date %}{{ cert.date }}取得{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </section>
+  {% endif %}
+
+  {% if cv.self_pr %}
+  <section>
+    <h2>■自己ＰＲ</h2>
+    <div class="block cv-edit" data-path="self_pr">{{ cv.self_pr | rich | safe }}</div>
+  </section>
+  {% endif %}
+
+  <p class="closing">以上</p>
+</article>
+{% if job %}
+<script src="/static/cv-edit.js"></script>
+{% endif %}
+{% if standalone %}
+</body>
+</html>
+{% endif %}
