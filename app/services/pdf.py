@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fpdf import FPDF
 
-from app.config import settings
+from app.config import APP_DIR
 from app.cv_layout import contact_bits, role_dates, skill_lines
 from app.richtext import letter_html, rich_tokens
 from app.schemas import Profile, ShokumuCv
@@ -24,20 +24,9 @@ def html_to_pdf(
     letter: str = "",
     job_title: str = "",
     company: str = "",
-    shokumu: ShokumuCv | None = None,
-    japanese_letter: bool = False,
 ) -> bytes:
-    if shokumu is not None and not letter:
-        return shokumu_to_pdf(shokumu)
     if letter:
-        return letter_to_pdf(
-            cv or Profile(),
-            letter,
-            job_title,
-            company,
-            japanese=japanese_letter or shokumu is not None,
-            sender_name=(shokumu.name if shokumu else ""),
-        )
+        return letter_to_pdf(cv or Profile(), letter, job_title, company)
     if cv is None:
         raise ValueError("A structured CV is required to build a PDF.")
     return cv_to_pdf(cv)
@@ -249,21 +238,16 @@ def letter_to_pdf(
     return buffer.getvalue()
 
 
-_JP_FONT_URL = "https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-jp@5.2.5/japanese-400-normal.ttf"
+_JP_FONT = APP_DIR / "fonts" / "NotoSansJP-Regular.ttf"
 
 
 def _ensure_jp_font() -> Path:
-    folder = settings.data_dir / "fonts"
-    folder.mkdir(parents=True, exist_ok=True)
-    path = folder / "NotoSansJP-Regular.ttf"
-    if path.exists() and path.stat().st_size > 10_000:
-        return path
-    import httpx
-
-    response = httpx.get(_JP_FONT_URL, follow_redirects=True, timeout=60)
-    response.raise_for_status()
-    path.write_bytes(response.content)
-    return path
+    if not _JP_FONT.exists():
+        raise FileNotFoundError(
+            f"Japanese PDF font missing: {_JP_FONT}. "
+            "Keep app/fonts/NotoSansJP-Regular.ttf in the repo."
+        )
+    return _JP_FONT
 
 
 def _plain(text: str) -> str:

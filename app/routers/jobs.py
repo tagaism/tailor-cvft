@@ -11,10 +11,10 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.db import get_db
 from app.deps import templates
-from app.models import Job
+from app.models import Generation, Job
 from app.richtext import apply_cv_path, sanitize_rich
 from app.schemas import CvStyle, Profile, ShokumuCv
-from app.services.pdf import html_to_pdf
+from app.services.pdf import html_to_pdf, letter_to_pdf, shokumu_to_pdf
 
 router = APIRouter()
 
@@ -31,7 +31,7 @@ def _job_or_404(db: Session, job_id: int) -> Job:
     return job
 
 
-def _generation_or_400(job: Job):
+def _get_generation_or_400(job: Job) -> Generation:
     generation = job.latest_generation
     if generation is None:
         raise HTTPException(status_code=400, detail="Build a CV first.")
@@ -44,11 +44,11 @@ def _is_shokumu(job: Job) -> bool:
 
 
 def _load_cv(job: Job) -> Profile:
-    return Profile.model_validate(_generation_or_400(job).cv_json)
+    return Profile.model_validate(_get_generation_or_400(job).cv_json)
 
 
 def _load_shokumu(job: Job) -> ShokumuCv:
-    return ShokumuCv.model_validate(_generation_or_400(job).cv_json)
+    return ShokumuCv.model_validate(_get_generation_or_400(job).cv_json)
 
 
 @router.post("/jobs/{job_id}/cv-bullet")
@@ -102,7 +102,7 @@ async def download_cv_pdf(request: Request, job_id: int, db: Session = Depends(g
     job = _job_or_404(db, job_id)
     if _is_shokumu(job):
         cv = _load_shokumu(job)
-        pdf = html_to_pdf("", shokumu=cv)
+        pdf = shokumu_to_pdf(cv)
         filename = _pdf_filename(cv.name or "resume", job.company_name or job.title, "shokumu")
         return Response(
             content=pdf,
@@ -125,7 +125,7 @@ async def download_cv_pdf(request: Request, job_id: int, db: Session = Depends(g
 @router.get("/jobs/{job_id}/cover-letter", response_class=HTMLResponse)
 async def preview_letter(request: Request, job_id: int, db: Session = Depends(get_db)):
     job = _job_or_404(db, job_id)
-    generation = _generation_or_400(job)
+    generation = _get_generation_or_400(job)
     if generation.cv_style == CvStyle.shokumu.value:
         jp = ShokumuCv.model_validate(generation.cv_json or {})
         cv = Profile(contact={"full_name": jp.name})
@@ -147,19 +147,18 @@ async def preview_letter(request: Request, job_id: int, db: Session = Depends(ge
 @router.get("/jobs/{job_id}/cover-letter/pdf")
 async def download_letter_pdf(request: Request, job_id: int, db: Session = Depends(get_db)):
     job = _job_or_404(db, job_id)
-    generation = _generation_or_400(job)
+    generation = _get_generation_or_400(job)
     japanese = generation.cv_style == CvStyle.shokumu.value
     if japanese:
         jp = ShokumuCv.model_validate(generation.cv_json or {})
         cv = Profile(contact={"full_name": jp.name})
-        pdf = html_to_pdf(
-            "",
-            cv=cv,
-            letter=generation.cover_letter,
-            job_title=job.title,
-            company=job.company_name,
-            shokumu=jp,
-            japanese_letter=True,
+        pdf = letter_to_pdf(
+            cv,
+            generation.cover_letter,
+            job.title,
+            job.company_name,
+            japanese=True,
+            sender_name=jp.name,
         )
         filename = _pdf_filename(jp.name or "letter", job.company_name or job.title, "shibou-douki")
         return Response(

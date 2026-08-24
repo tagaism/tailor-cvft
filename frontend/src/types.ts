@@ -95,6 +95,10 @@ export type MatchAnalysis = {
 
 export type CvStyle = "times" | "shokumu";
 
+export function parseCvStyle(value: unknown): CvStyle {
+  return value === "shokumu" ? "shokumu" : "times";
+}
+
 export type Generation = {
   id: number;
   created_at: string | null;

@@ -20,7 +20,7 @@ import { ApiError, api, apiOrigin } from "../api";
 import OpenableUrlField from "../components/OpenableUrlField";
 import StatusChip from "../components/StatusChip";
 import { JOB_NOT_FOUND, parseRouteId } from "../ids";
-import type { CvStyle, Health, Job } from "../types";
+import { parseCvStyle, type CvStyle, type Health, type Job } from "../types";
 
 export default function JobDetailPage() {
   const { id } = useParams();
@@ -49,9 +49,7 @@ export default function JobDetailPage() {
       .then((data) => {
         if (cancelled) return;
         setJob(data);
-        if (data.generation?.cv_style === "shokumu" || data.generation?.cv_style === "times") {
-          setCvStyle(data.generation.cv_style);
-        }
+        setCvStyle(parseCvStyle(data.generation?.cv_style));
       })
       .catch((err: Error) => {
         if (!cancelled) {

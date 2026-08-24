@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -12,6 +13,11 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 from app.config import DEFAULT_LLM_PROVIDER, LOCAL_LLM_API_KEY, settings
 from app.llm_settings import ResolvedLlm, resolve_llm
 from app.schemas import MatchAnalysis, Profile, ShokumuCv, ShokumuPack, TailorPack
+from app.services.ground import ground_shokumu_cv
+
+logger = logging.getLogger(__name__)
+_JOB_TEXT_LIMIT = 18000
+_CV_TEXT_LIMIT = 20000
 
 PROFILE_SCHEMA_HINT = """
 {
@@ -398,7 +404,7 @@ def extract_profile_from_cv(raw_text: str) -> tuple[Profile, str]:
     )
     user = (
         f"JSON schema:\n{PROFILE_SCHEMA_HINT}\n\n"
-        f"Raw CV text:\n{raw_text[:20000]}"
+        f"Raw CV text:\n{_clip(raw_text, _CV_TEXT_LIMIT, label='CV text')}"
     )
     data, model = complete_json(system, user)
     try:
@@ -433,7 +439,7 @@ def tailor_pack(
     user = {
         "job_title": title,
         "company": company,
-        "job_description": job_text[:18000],
+        "job_description": _clip(job_text, _JOB_TEXT_LIMIT, label="job description"),
         "required_skills": required_skills or [],
         "desired_skills": desired_skills or [],
         "candidate_notes": notes,
@@ -463,6 +469,14 @@ def tailor_pack(
         match=match,
     )
     return pack, model
+
+
+def _clip(text: str, limit: int, *, label: str) -> str:
+    raw = text or ""
+    if len(raw) <= limit:
+        return raw
+    logger.warning("Truncating %s from %s to %s characters", label, len(raw), limit)
+    return raw[:limit]
 
 
 def _normalize_match(raw_match) -> dict[str, Any]:
@@ -499,7 +513,7 @@ def tailor_shokumu_pack(
         "- プロフィールにある事実のみ。雇用主・役職・年月・学位・数値・資本金・売上・従業員数・上場を捏造しない。\n"
         "- 不明な会社概要（資本金・売上高・従業員数・上場）は空文字。\n"
         "- 雇用形態が不明なら「正社員として勤務」。事業内容は分かる範囲のみ。\n"
-        "- 和名が不明ならプロフィールの氏名をそのまま使う。\n"
+        "- 和名が不明ならプロフィールの氏名をそのまま使う。会社名はプロフィールの表記のまま。\n"
         "- 職務経歴は会社ごとにまとめる。各社の assignments に期間・部署・【職務内容】・【ポイント】を書く。\n"
         "- 職務内容は具体。ポイントはプロフィールにある成果・数値のみ。\n"
         "- PCスキルはプロフィールのツールを name/level で。Officeに無いものは無理にWord/Excelにしない。\n"
@@ -512,7 +526,7 @@ def tailor_shokumu_pack(
         "as_of": today,
         "job_title": title,
         "company": company,
-        "job_description": job_text[:18000],
+        "job_description": _clip(job_text, _JOB_TEXT_LIMIT, label="job description"),
         "required_skills": required_skills or [],
         "desired_skills": desired_skills or [],
         "candidate_notes": notes,
@@ -537,6 +551,7 @@ def tailor_shokumu_pack(
     except Exception as exc:
         raise LLMError(f"Model JSON did not match the expected schema: {exc}") from exc
     cv.as_of = today
+    cv = ground_shokumu_cv(cv, profile)
     pack = ShokumuPack(
         cv=cv,
         cover_letter=str(data.get("cover_letter") or "").strip(),

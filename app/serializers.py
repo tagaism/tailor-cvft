@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from app.models import Company, Generation, Job
 from app.schemas import CvStyle, MatchAnalysis, Profile, ShokumuCv
+
+logger = logging.getLogger(__name__)
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -47,6 +50,7 @@ def generation_payload(generation: Generation | None) -> dict | None:
     try:
         match = MatchAnalysis.model_validate(generation.match_json or {})
     except Exception:
+        logger.exception("Invalid match_json for generation %s", generation.id)
         match = MatchAnalysis()
     try:
         if style == CvStyle.shokumu.value:
@@ -54,6 +58,7 @@ def generation_payload(generation: Generation | None) -> dict | None:
         else:
             cv = Profile.model_validate(generation.cv_json or {}).model_dump()
     except Exception:
+        logger.exception("Invalid cv_json for generation %s (style=%s)", generation.id, style)
         cv = ShokumuCv().model_dump() if style == CvStyle.shokumu.value else Profile().model_dump()
     return {
         "id": generation.id,
