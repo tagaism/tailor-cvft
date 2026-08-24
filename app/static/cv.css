@@ -130,6 +130,59 @@
   margin-top: 0.85rem;
 }
 
+.shokumu {
+  color: #111;
+  font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.55;
+  max-width: 740px;
+  margin: 0 auto;
+}
+.shokumu-header { margin: 0 0 1rem; }
+.shokumu h1 {
+  font-size: 18pt;
+  font-weight: 700;
+  text-align: center;
+  margin: 0 0 0.35rem;
+  letter-spacing: 0.35em;
+}
+.shokumu .as-of { text-align: right; font-size: 9.5pt; margin: 0 0 0.4rem; color: #333; }
+.shokumu .name { font-size: 12pt; font-weight: 700; margin: 0; text-align: right; }
+.shokumu h2 {
+  font-size: 12pt;
+  font-weight: 700;
+  background: #f3efe6;
+  border: 1px solid #d6d0c4;
+  padding: 0.2rem 0.45rem;
+  margin: 0.9rem 0 0.4rem;
+}
+.shokumu .block { white-space: pre-wrap; margin: 0 0 0.35rem; }
+.shokumu .employer { margin: 0 0 1.1rem; }
+.shokumu .employer-head { font-weight: 700; margin: 0 0 0.2rem; }
+.shokumu .employer-meta, .shokumu .employer-facts { margin: 0 0 0.25rem; font-size: 10pt; }
+.shokumu .emp-type { float: right; }
+.shokumu .duty-table, .shokumu .skill-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.35rem 0 0.55rem;
+  font-size: 10.5pt;
+}
+.shokumu .duty-table th,
+.shokumu .duty-table td,
+.shokumu .skill-table th,
+.shokumu .skill-table td {
+  border: 1px solid #d6d0c4;
+  padding: 0.28rem 0.45rem;
+  vertical-align: top;
+}
+.shokumu .duty-table th { background: #faf7f1; font-weight: 600; text-align: center; }
+.shokumu .duty-table .period { width: 6.5rem; text-align: center; white-space: nowrap; }
+.shokumu .dept { font-weight: 600; margin: 0 0 0.35rem; }
+.shokumu .label { font-weight: 700; margin: 0.35rem 0 0.15rem; }
+.shokumu .skill-table th { width: 8rem; background: #faf7f1; text-align: left; }
+.shokumu .skill-table .date { width: 8rem; text-align: right; white-space: nowrap; }
+.shokumu .closing { text-align: right; margin: 1.4rem 0 0; font-weight: 600; }
+
 @page { size: letter; margin: 0.65in 0.7in 0.65in 0.7in; }
 
 body.cv-page {
@@ -139,7 +192,7 @@ body.cv-page {
 }
 @media screen {
   body.cv-page { background: #f3efe6; }
-  body.cv-page .cv, body.cv-page .letter {
+  body.cv-page .cv, body.cv-page .letter, body.cv-page .shokumu {
     background: #fff;
     padding: 0.65in 0.7in;
     box-shadow: 0 10px 40px rgba(0,0,0,0.06);

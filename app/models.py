@@ -110,5 +110,6 @@ class Generation(Base):
     cover_letter: Mapped[str] = mapped_column(Text, default="")
     match_json: Mapped[dict] = mapped_column(JSON, default=dict)
     model_name: Mapped[str] = mapped_column(String(200), default="")
+    cv_style: Mapped[str] = mapped_column(String(40), default="times")
 
     job: Mapped[Job] = relationship(back_populates="generations")

@@ -59,7 +59,8 @@ export const api = {
     request<Job>(`/api/jobs/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteJob: (id: number) => request<{ ok: boolean }>(`/api/jobs/${id}`, { method: "DELETE" }),
   refetchJob: (id: number) => request<Job>(`/api/jobs/${id}/refetch`, { method: "POST" }),
-  buildJob: (id: number) => request<Job>(`/api/jobs/${id}/build`, { method: "POST" }, 600_000),
+  buildJob: (id: number, style = "times") =>
+    request<Job>(`/api/jobs/${id}/build?style=${encodeURIComponent(style)}`, { method: "POST" }, 600_000),
   companies: () => request<{ companies: Company[] }>("/api/companies"),
   createCompany: (payload: Record<string, string>) =>
     request<Company>("/api/companies", { method: "POST", body: JSON.stringify(payload) }),

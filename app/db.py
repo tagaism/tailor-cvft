@@ -22,6 +22,7 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _migrate_jobs()
+    _migrate_generations()
     _backfill_companies()
 
 
@@ -53,6 +54,14 @@ def _migrate_jobs() -> None:
     with engine.begin() as conn:
         for statement in statements:
             conn.execute(text(statement))
+
+
+def _migrate_generations() -> None:
+    columns = _table_columns("generations")
+    if "cv_style" in columns:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE generations ADD COLUMN cv_style VARCHAR(40) DEFAULT 'times'"))
 
 
 def _backfill_companies() -> None:

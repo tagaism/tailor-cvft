@@ -154,6 +154,58 @@ class TailorPack(BaseModel):
     match: MatchAnalysis = Field(default_factory=MatchAnalysis)
 
 
+class CvStyle(str, Enum):
+    times = "times"
+    shokumu = "shokumu"
+
+
+class ShokumuAssignment(BaseModel):
+    start: str = ""
+    end: str = ""
+    department: str = ""
+    duties: str = ""
+    points: str = ""
+
+
+class ShokumuEmployer(BaseModel):
+    start: str = ""
+    end: str = ""
+    company: str = ""
+    business: str = ""
+    employment_type: str = ""
+    capital: str = ""
+    revenue: str = ""
+    employees: str = ""
+    listing: str = ""
+    assignments: list[ShokumuAssignment] = Field(default_factory=list)
+
+
+class ShokumuPcSkill(BaseModel):
+    name: str = ""
+    level: str = ""
+
+
+class ShokumuCert(BaseModel):
+    name: str = ""
+    date: str = ""
+
+
+class ShokumuCv(BaseModel):
+    as_of: str = ""
+    name: str = ""
+    summary: str = ""
+    employers: list[ShokumuEmployer] = Field(default_factory=list)
+    pc_skills: list[ShokumuPcSkill] = Field(default_factory=list)
+    certifications: list[ShokumuCert] = Field(default_factory=list)
+    self_pr: str = ""
+
+
+class ShokumuPack(BaseModel):
+    cv: ShokumuCv
+    cover_letter: str = ""
+    match: MatchAnalysis = Field(default_factory=MatchAnalysis)
+
+
 class ApplicationStatus(str, Enum):
     saved = "saved"
     applied = "applied"

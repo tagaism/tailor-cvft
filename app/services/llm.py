@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -11,7 +12,12 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
 from app.config import DEFAULT_LLM_PROVIDER, LOCAL_LLM_API_KEY, settings
 from app.llm_settings import ResolvedLlm, resolve_llm
-from app.schemas import MatchAnalysis, Profile, TailorPack
+from app.schemas import MatchAnalysis, Profile, ShokumuCv, ShokumuPack, TailorPack
+from app.services.ground import ground_shokumu_cv
+
+logger = logging.getLogger(__name__)
+_JOB_TEXT_LIMIT = 18000
+_CV_TEXT_LIMIT = 20000
 
 PROFILE_SCHEMA_HINT = """
 {
@@ -52,6 +58,39 @@ PROFILE_SCHEMA_HINT = """
   "certifications": [
     {"name": "", "issuer": "", "year": ""}
   ]
+}
+""".strip()
+
+SHOKUMU_SCHEMA_HINT = """
+{
+  "as_of": "2026年8月24日",
+  "name": "",
+  "summary": "",
+  "employers": [
+    {
+      "start": "2010年03月",
+      "end": "2015年02月",
+      "company": "",
+      "business": "",
+      "employment_type": "正社員として勤務",
+      "capital": "",
+      "revenue": "",
+      "employees": "",
+      "listing": "",
+      "assignments": [
+        {
+          "start": "2010年03月",
+          "end": "2015年02月",
+          "department": "",
+          "duties": "",
+          "points": ""
+        }
+      ]
+    }
+  ],
+  "pc_skills": [{"name": "", "level": ""}],
+  "certifications": [{"name": "", "date": ""}],
+  "self_pr": ""
 }
 """.strip()
 
@@ -365,7 +404,7 @@ def extract_profile_from_cv(raw_text: str) -> tuple[Profile, str]:
     )
     user = (
         f"JSON schema:\n{PROFILE_SCHEMA_HINT}\n\n"
-        f"Raw CV text:\n{raw_text[:20000]}"
+        f"Raw CV text:\n{_clip(raw_text, _CV_TEXT_LIMIT, label='CV text')}"
     )
     data, model = complete_json(system, user)
     try:
@@ -400,7 +439,7 @@ def tailor_pack(
     user = {
         "job_title": title,
         "company": company,
-        "job_description": job_text[:18000],
+        "job_description": _clip(job_text, _JOB_TEXT_LIMIT, label="job description"),
         "required_skills": required_skills or [],
         "desired_skills": desired_skills or [],
         "candidate_notes": notes,
@@ -419,23 +458,101 @@ def tailor_pack(
         },
     }
     data, model = complete_json(system, json.dumps(user, ensure_ascii=False, indent=2))
-    raw_match = data.get("match") or {}
-    if isinstance(raw_match, dict):
-        coverage = raw_match.get("keyword_coverage") or []
-        if isinstance(coverage, list):
-            normalized = []
-            for item in coverage:
-                if isinstance(item, str):
-                    normalized.append({"keyword": item, "present": False})
-                else:
-                    normalized.append(item)
-            raw_match["keyword_coverage"] = normalized
     try:
         cv = Profile.model_validate(data.get("cv") or {})
-        match = MatchAnalysis.model_validate(raw_match if isinstance(raw_match, dict) else {})
+        match = MatchAnalysis.model_validate(_normalize_match(data.get("match")))
     except Exception as exc:
         raise LLMError(f"Model JSON did not match the expected schema: {exc}") from exc
     pack = TailorPack(
+        cv=cv,
+        cover_letter=str(data.get("cover_letter") or "").strip(),
+        match=match,
+    )
+    return pack, model
+
+
+def _clip(text: str, limit: int, *, label: str) -> str:
+    raw = text or ""
+    if len(raw) <= limit:
+        return raw
+    logger.warning("Truncating %s from %s to %s characters", label, len(raw), limit)
+    return raw[:limit]
+
+
+def _normalize_match(raw_match) -> dict[str, Any]:
+    if not isinstance(raw_match, dict):
+        return {}
+    coverage = raw_match.get("keyword_coverage") or []
+    if isinstance(coverage, list):
+        normalized = []
+        for item in coverage:
+            if isinstance(item, str):
+                normalized.append({"keyword": item, "present": False})
+            else:
+                normalized.append(item)
+        raw_match = dict(raw_match)
+        raw_match["keyword_coverage"] = normalized
+    return raw_match
+
+
+def tailor_shokumu_pack(
+    profile: Profile,
+    job_text: str,
+    notes: str,
+    title: str,
+    company: str,
+    required_skills: list[str] | None = None,
+    desired_skills: list[str] | None = None,
+) -> tuple[ShokumuPack, str]:
+    now = datetime.now(timezone.utc)
+    today = f"{now.year}年{now.month}月{now.day}日"
+    system = (
+        "あなたは日本の職務経歴書（Googleスプレッドシート定型）の作成者です。"
+        "候補者の既存プロフィールだけを使い、日本語の職務経歴書と志望動機を書く。\n"
+        "HARD RULES:\n"
+        "- プロフィールにある事実のみ。雇用主・役職・年月・学位・数値・資本金・売上・従業員数・上場を捏造しない。\n"
+        "- 不明な会社概要（資本金・売上高・従業員数・上場）は空文字。\n"
+        "- 雇用形態が不明なら「正社員として勤務」。事業内容は分かる範囲のみ。\n"
+        "- 和名が不明ならプロフィールの氏名をそのまま使う。会社名はプロフィールの表記のまま。\n"
+        "- 職務経歴は会社ごとにまとめる。各社の assignments に期間・部署・【職務内容】・【ポイント】を書く。\n"
+        "- 職務内容は具体。ポイントはプロフィールにある成果・数値のみ。\n"
+        "- PCスキルはプロフィールのツールを name/level で。Officeに無いものは無理にWord/Excelにしない。\n"
+        "- 資格は name と取得年月（不明なら空）。自己PRは＜見出し＞付き2テーマ程度。\n"
+        "- 職務要約は3–6文。志望動機は250–400字、この求人向け、事実のみ。\n"
+        "- match は英語の短い正直な分析（各リスト最大6）。\n"
+        "- JSONオブジェクト1つだけ返す。キーは cv, cover_letter, match。"
+    )
+    user = {
+        "as_of": today,
+        "job_title": title,
+        "company": company,
+        "job_description": _clip(job_text, _JOB_TEXT_LIMIT, label="job description"),
+        "required_skills": required_skills or [],
+        "desired_skills": desired_skills or [],
+        "candidate_notes": notes,
+        "profile": profile.model_dump(),
+        "output_schema": {
+            "cv": json.loads(SHOKUMU_SCHEMA_HINT),
+            "cover_letter": "志望動機（日本語プレーンテキスト）",
+            "match": {
+                "matched_skills": ["..."],
+                "missing_skills": ["..."],
+                "keyword_coverage": [{"keyword": "...", "present": True}],
+                "emphasis": ["..."],
+                "gaps": ["..."],
+                "talking_points": ["..."],
+            },
+        },
+    }
+    data, model = complete_json(system, json.dumps(user, ensure_ascii=False, indent=2))
+    try:
+        cv = ShokumuCv.model_validate(data.get("cv") or {})
+        match = MatchAnalysis.model_validate(_normalize_match(data.get("match")))
+    except Exception as exc:
+        raise LLMError(f"Model JSON did not match the expected schema: {exc}") from exc
+    cv.as_of = today
+    cv = ground_shokumu_cv(cv, profile)
+    pack = ShokumuPack(
         cv=cv,
         cover_letter=str(data.get("cover_letter") or "").strip(),
         match=match,

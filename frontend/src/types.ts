@@ -93,10 +93,17 @@ export type MatchAnalysis = {
   talking_points: string[];
 };
 
+export type CvStyle = "times" | "shokumu";
+
+export function parseCvStyle(value: unknown): CvStyle {
+  return value === "shokumu" ? "shokumu" : "times";
+}
+
 export type Generation = {
   id: number;
   created_at: string | null;
   model_name: string;
+  cv_style?: CvStyle;
   cover_letter: string;
   cv: Profile;
   match: MatchAnalysis;
