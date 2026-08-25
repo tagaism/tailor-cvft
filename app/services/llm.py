@@ -46,7 +46,8 @@ PROFILE_SCHEMA_HINT = """
       "start": "",
       "end": "",
       "current": false,
-      "bullets": ["..."]
+      "projects": [{"summary": "what you did", "impact": "outcome or metric"}],
+      "bullets": []
     }
   ],
   "education": [
@@ -400,7 +401,8 @@ def extract_profile_from_cv(raw_text: str) -> tuple[Profile, str]:
         "Return ONLY valid JSON matching the schema. "
         "Do not invent facts. If a field is missing, use an empty string or empty array. "
         "Keep dates as originally written. Split experience into distinct roles. "
-        "Put each achievement in bullets."
+        "For each role, list projects with a short summary and impact (metrics or outcomes if present). "
+        "Leave impact empty if unknown. Do not invent facts."
     )
     user = (
         f"JSON schema:\n{PROFILE_SCHEMA_HINT}\n\n"
@@ -423,18 +425,31 @@ def tailor_pack(
     desired_skills: list[str] | None = None,
 ) -> tuple[TailorPack, str]:
     system = (
-        "You are a precise resume tailor. You rewrite a candidate's existing profile for one job.\n"
-        "HARD RULES:\n"
-        "- Use only facts present in the profile. Never invent employers, titles, dates, degrees, metrics, tools, or skills.\n"
-        "- You MAY rephrase bullets, reorder, drop irrelevant items, and use the job's wording when it honestly describes existing work.\n"
-        "- Skills MUST be four labeled lines only (omit a line if empty), using only skills from the profile:\n"
-        "  Languages: ...\n  Databases: ...\n  Frameworks: ...\n  Technologies and Tools: ...\n"
-        "- additional_skills: spoken languages or extras already in the profile. Use [] if none.\n"
-        "- summary: 2-4 sentences, tailored intro placed under the name and above Technical Skills. Facts only.\n"
-        "- One-page friendly: 3–6 bullets per recent role; fewer for older roles.\n"
-        "- Cover letter: 180–250 words, specific to this job, no fake claims, plain text paragraphs.\n"
-        "- Match analysis must be honest and SHORT: at most 6 items per list, short phrases only.\n"
-        "- Return one complete JSON object with keys cv, cover_letter, match. No markdown fences. Do not stop mid-string."
+        "You are a precise resume tailor. You rewrite one candidate’s existing profile for one specific job.\n\n"
+        "HARD RULES (never break these):\n"
+        "- Use ONLY facts that already exist in the provided profile. Never invent employers, titles, dates, "
+        "degrees, metrics, tools, skills, achievements, or responsibilities.\n"
+        "- You MAY rephrase, reorder, drop low-relevance items, and adopt the job’s wording when it honestly "
+        "describes work the candidate has already done.\n"
+        "- If a fact is not in the profile, omit it. Do not approximate or fill gaps.\n\n"
+        "SKILLS FORMAT (strict):\n"
+        "- Technical Skills must be exactly these four lines (omit any line that would be empty):\n"
+        "  Languages: ...\n"
+        "  Databases: ...\n"
+        "  Frameworks: ...\n"
+        "  Technologies and Tools: ...\n"
+        "- additional_skills: array of spoken languages or other extras that already appear in the profile. "
+        "Use [] if none.\n\n"
+        "CONTENT GUIDELINES:\n"
+        "- summary: 2–4 sentences, tailored, facts only. Placed under the name and above Technical Skills.\n"
+        "- Up to two pages friendly: 3–6 bullets per recent role; fewer for older roles.\n"
+        "- Experience: 3–6 bullets for recent roles, fewer for older roles. Strong action verbs, truthful only.\n"
+        "- Cover letter: 180–250 words, plain text paragraphs, specific to this job and company, no fabricated claims.\n"
+        "- Match analysis must be honest and concise.\n\n"
+        "OUTPUT:\n"
+        "- Return one complete JSON object that exactly follows the output_schema provided in the user message.\n"
+        "- No markdown fences, no commentary, no text before or after the JSON.\n"
+        "- Do not stop mid-string."
     )
     user = {
         "job_title": title,
@@ -515,6 +530,7 @@ def tailor_shokumu_pack(
         "- 雇用形態が不明なら「正社員として勤務」。事業内容は分かる範囲のみ。\n"
         "- 和名が不明ならプロフィールの氏名をそのまま使う。会社名はプロフィールの表記のまま。\n"
         "- 職務経歴は会社ごとにまとめる。各社の assignments に期間・部署・【職務内容】・【ポイント】を書く。\n"
+        "- 各社 experience.projects の summary を【職務内容】、impact を【ポイント】に対応させる。\n"
         "- 職務内容は具体。ポイントはプロフィールにある成果・数値のみ。\n"
         "- PCスキルはプロフィールのツールを name/level で。Officeに無いものは無理にWord/Excelにしない。\n"
         "- 資格は name と取得年月（不明なら空）。自己PRは＜見出し＞付き2テーマ程度。\n"
