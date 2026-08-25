@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any, TypedDict
 
@@ -358,13 +359,129 @@ def _close_truncated_json(text: str) -> str:
     return chunk
 
 
-def complete_json(system: str, user: str) -> tuple[dict[str, Any], str]:
+class _ReasoningWindow:
+    """Keep the newest complete reasoning lines for the live UI (about four rows)."""
+
+    def __init__(self, max_lines: int = 4):
+        self.max_lines = max_lines
+        self._text = ""
+
+    def push(self, chunk: str) -> list[str]:
+        if not chunk:
+            return self.lines
+        self._text += chunk.replace("\r\n", "\n").replace("\r", "\n")
+        return self.lines
+
+    @property
+    def lines(self) -> list[str]:
+        parts = self._text.split("\n")
+        if parts and parts[-1] == "":
+            parts = parts[:-1]
+        return [part for part in parts if part.strip()][-self.max_lines :]
+
+
+def _delta_reasoning_text(delta: Any) -> str:
+    if delta is None:
+        return ""
+    dumped: dict[str, Any] = {}
+    if hasattr(delta, "model_dump"):
+        try:
+            dumped = delta.model_dump(exclude_none=True)
+        except Exception:
+            dumped = {}
+    for key in ("reasoning", "reasoning_content"):
+        value = dumped.get(key)
+        if value is None:
+            value = getattr(delta, key, None)
+        if isinstance(value, str) and value:
+            return value
+    details = dumped.get("reasoning_details")
+    if details is None:
+        details = getattr(delta, "reasoning_details", None)
+    if isinstance(details, list):
+        parts: list[str] = []
+        for item in details:
+            if isinstance(item, dict):
+                text = item.get("text") or item.get("summary") or ""
+            else:
+                text = getattr(item, "text", None) or getattr(item, "summary", None) or ""
+            if isinstance(text, str) and text:
+                parts.append(text)
+        return "".join(parts)
+    return ""
+
+
+def _reasoning_request_kwargs() -> dict[str, Any]:
+    provider = _resolved().provider
+    if provider in {"openrouter", "xai", "openai"}:
+        return {"extra_body": {"reasoning": {"effort": "medium"}}}
+    return {}
+
+
+def _stream_completion(
+    client: OpenAI,
+    model: str,
+    messages: list[dict[str, str]],
+    extra: dict[str, Any],
+    on_reasoning: Callable[[list[str]], None] | None,
+) -> str:
+    window = _ReasoningWindow()
+    last_emit = 0.0
+
+    def emit(force: bool = False) -> None:
+        nonlocal last_emit
+        if on_reasoning is None or not window.lines:
+            return
+        now = time.monotonic()
+        if not force and now - last_emit < 0.1:
+            return
+        last_emit = now
+        on_reasoning(window.lines)
+
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.3,
+        "max_tokens": 8192,
+        "stream": True,
+    }
+    try:
+        stream = client.chat.completions.create(**kwargs, **extra)
+    except APIStatusError as exc:
+        if extra and exc.status_code in {400, 422}:
+            logger.info("Retrying stream without reasoning extras: %s", exc.message)
+            stream = client.chat.completions.create(**kwargs)
+        else:
+            raise
+    content_parts: list[str] = []
+    for chunk in stream:
+        choices = getattr(chunk, "choices", None) or []
+        if not choices:
+            continue
+        delta = choices[0].delta
+        reasoning = _delta_reasoning_text(delta)
+        if reasoning:
+            window.push(reasoning)
+            emit()
+        piece = getattr(delta, "content", None) or ""
+        if piece:
+            content_parts.append(piece)
+    emit(force=True)
+    return "".join(content_parts).strip()
+
+
+def complete_json(
+    system: str,
+    user: str,
+    on_reasoning: Callable[[list[str]], None] | None = None,
+) -> tuple[dict[str, Any], str]:
     client = _client()
     model = resolve_model(client)
     messages = [
         {"role": "system", "content": system},
         {"role": "user", "content": user},
     ]
+    extra = _reasoning_request_kwargs() if on_reasoning else {}
     last_error: Exception | None = None
     for attempt in range(2):
         if attempt == 1:
@@ -375,17 +492,20 @@ def complete_json(system: str, user: str) -> tuple[dict[str, Any], str]:
                 }
             )
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=0.3,
-                max_tokens=8192,
-            )
+            if on_reasoning:
+                content = _stream_completion(client, model, messages, extra, on_reasoning)
+            else:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=0.3,
+                    max_tokens=8192,
+                )
+                content = (response.choices[0].message.content or "").strip()
         except LLMError:
             raise
         except Exception as exc:
             raise LLMError(_friendly_connection_error(exc)) from exc
-        content = (response.choices[0].message.content or "").strip()
         try:
             return extract_json_object(content), model
         except (LLMError, json.JSONDecodeError) as exc:
@@ -423,6 +543,7 @@ def tailor_pack(
     company: str,
     required_skills: list[str] | None = None,
     desired_skills: list[str] | None = None,
+    on_reasoning: Callable[[list[str]], None] | None = None,
 ) -> tuple[TailorPack, str]:
     system = (
         "You are a precise resume tailor. You rewrite one candidate’s existing profile for one specific job.\n\n"
@@ -472,7 +593,9 @@ def tailor_pack(
             },
         },
     }
-    data, model = complete_json(system, json.dumps(user, ensure_ascii=False, indent=2))
+    data, model = complete_json(
+        system, json.dumps(user, ensure_ascii=False, indent=2), on_reasoning=on_reasoning
+    )
     try:
         cv = Profile.model_validate(data.get("cv") or {})
         match = MatchAnalysis.model_validate(_normalize_match(data.get("match")))
@@ -518,6 +641,7 @@ def tailor_shokumu_pack(
     company: str,
     required_skills: list[str] | None = None,
     desired_skills: list[str] | None = None,
+    on_reasoning: Callable[[list[str]], None] | None = None,
 ) -> tuple[ShokumuPack, str]:
     now = datetime.now(timezone.utc)
     today = f"{now.year}年{now.month}月{now.day}日"
@@ -560,7 +684,9 @@ def tailor_shokumu_pack(
             },
         },
     }
-    data, model = complete_json(system, json.dumps(user, ensure_ascii=False, indent=2))
+    data, model = complete_json(
+        system, json.dumps(user, ensure_ascii=False, indent=2), on_reasoning=on_reasoning
+    )
     try:
         cv = ShokumuCv.model_validate(data.get("cv") or {})
         match = MatchAnalysis.model_validate(_normalize_match(data.get("match")))
