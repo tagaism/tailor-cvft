@@ -232,4 +232,4 @@ That directory is gitignored. Do not commit a filled profile.
 
 ## License
 
-Personal project. Use and fork as you like unless you add a license file later.
+[MIT](LICENSE). The bundled Noto Sans JP font is under the [SIL Open Font License](https://scripts.sil.org/OFL).
