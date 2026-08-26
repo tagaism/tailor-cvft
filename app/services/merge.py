@@ -5,7 +5,6 @@ from app.schemas import (
     Contact,
     Education,
     Experience,
-    ExperienceProject,
     Profile,
     Project,
 )
@@ -54,30 +53,12 @@ def _merge_experience(current: list[Experience], incoming: list[Experience]) -> 
             existing.start = _prefer(existing.start, item.start)
             existing.end = _prefer(existing.end, item.end)
             existing.current = existing.current or item.current
-            existing.projects = _merge_role_projects(existing.projects, item.projects)
-            existing.bullets = [
-                " — ".join(part for part in [proj.summary.strip(), proj.impact.strip()] if part)
-                for proj in existing.projects
-            ]
+            existing.bullets = _union_preserve(existing.bullets, item.bullets)
         else:
             copy = item.model_copy(deep=True)
             merged.append(copy)
             if any(key):
                 index[key] = copy
-    return merged
-
-
-def _merge_role_projects(
-    current: list[ExperienceProject], incoming: list[ExperienceProject]
-) -> list[ExperienceProject]:
-    merged = [item.model_copy(deep=True) for item in current]
-    seen = {_norm(item.summary) for item in merged if item.summary}
-    for item in incoming:
-        key = _norm(item.summary)
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        merged.append(item.model_copy(deep=True))
     return merged
 
 

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import queue
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -223,7 +221,33 @@ async def api_refetch_job(job_id: int, db: Session = Depends(get_db)):
     return {**job_payload(job, detail=True), "profile_ready": load_profile().is_ready()}
 
 
-def _save_generation(db: Session, job: Job, pack, model: str, style: str) -> dict:
+@router.post("/jobs/{job_id}/build")
+async def api_build_job(job_id: int, style: str = CvStyle.times.value, db: Session = Depends(get_db)):
+    job = db.get(Job, job_id)
+    if job is None:
+        _error("Job not found.", 404)
+    profile = load_profile()
+    if not profile.is_ready():
+        _error("Fill your profile (name plus experience, skills, or education) before building.")
+    if not job.source_text.strip():
+        _error("This job has no description yet. Paste the posting text and save.")
+    style = (style or CvStyle.times.value).strip()
+    if style not in {item.value for item in CvStyle}:
+        _error("Unknown CV style. Use times or shokumu.")
+    tailor = tailor_shokumu_pack if style == CvStyle.shokumu.value else tailor_pack
+    try:
+        pack, model = await asyncio.to_thread(
+            tailor,
+            profile,
+            job.source_text,
+            job.notes,
+            job.title,
+            job.company_name,
+            job.required_skill_list,
+            job.desired_skill_list,
+        )
+    except LLMError as exc:
+        _error(str(exc))
     generation = Generation(
         job_id=job.id,
         cv_json=pack.cv.model_dump(),
@@ -237,113 +261,6 @@ def _save_generation(db: Session, job: Job, pack, model: str, style: str) -> dic
     db.commit()
     db.refresh(job)
     return {**job_payload(job, detail=True), "profile_ready": True}
-
-
-def _sse(payload: dict) -> str:
-    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-
-
-@router.post("/jobs/{job_id}/build")
-async def api_build_job(
-    request: Request,
-    job_id: int,
-    style: str = CvStyle.times.value,
-    db: Session = Depends(get_db),
-):
-    job = db.get(Job, job_id)
-    if job is None:
-        _error("Job not found.", 404)
-    profile = load_profile()
-    if not profile.is_ready():
-        _error("Fill your profile (name plus experience, skills, or education) before building.")
-    if not job.source_text.strip():
-        _error("This job has no description yet. Paste the posting text and save.")
-    style = (style or CvStyle.times.value).strip()
-    if style not in {item.value for item in CvStyle}:
-        _error("Unknown CV style. Use times or shokumu.")
-    tailor = tailor_shokumu_pack if style == CvStyle.shokumu.value else tailor_pack
-    source_text = job.source_text
-    notes = job.notes
-    title = job.title
-    company_name = job.company_name
-    required_skills = job.required_skill_list
-    desired_skills = job.desired_skill_list
-    wants_sse = "text/event-stream" in (request.headers.get("accept") or "")
-    if not wants_sse:
-        try:
-            pack, model = await asyncio.to_thread(
-                tailor,
-                profile,
-                source_text,
-                notes,
-                title,
-                company_name,
-                required_skills,
-                desired_skills,
-            )
-        except LLMError as exc:
-            _error(str(exc))
-        return _save_generation(db, job, pack, model, style)
-
-    events: queue.Queue = queue.Queue()
-
-    def on_reasoning(lines: list[str]) -> None:
-        events.put({"type": "reasoning", "lines": lines})
-
-    def work() -> None:
-        try:
-            pack, model = tailor(
-                profile,
-                source_text,
-                notes,
-                title,
-                company_name,
-                required_skills,
-                desired_skills,
-                on_reasoning=on_reasoning,
-            )
-            events.put({"type": "ok", "pack": pack, "model": model})
-        except LLMError as exc:
-            events.put({"type": "error", "detail": str(exc)})
-        except Exception as exc:
-            events.put({"type": "error", "detail": str(exc)})
-
-    worker = asyncio.get_running_loop().run_in_executor(None, work)
-
-    async def stream():
-        while True:
-            try:
-                item = await asyncio.to_thread(events.get, True, 0.5)
-            except queue.Empty:
-                if worker.done() and events.empty():
-                    err = worker.exception()
-                    if err is not None:
-                        yield _sse({"type": "error", "detail": str(err)})
-                    return
-                yield ": keepalive\n\n"
-                continue
-            kind = item.get("type")
-            if kind == "reasoning":
-                yield _sse({"type": "reasoning", "lines": item.get("lines") or []})
-            elif kind == "error":
-                yield _sse({"type": "error", "detail": item.get("detail") or "Build failed."})
-                await worker
-                return
-            elif kind == "ok":
-                payload = _save_generation(db, job, item["pack"], item["model"], style)
-                yield _sse({"type": "done", "job": payload})
-                await worker
-                return
-
-    return StreamingResponse(
-        stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
 
 
 @router.get("/companies")

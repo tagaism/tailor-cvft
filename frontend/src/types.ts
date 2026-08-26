@@ -35,11 +35,6 @@ export type Contact = {
   website: string;
 };
 
-export type ExperienceProject = {
-  summary: string;
-  impact: string;
-};
-
 export type Experience = {
   title: string;
   company: string;
@@ -48,7 +43,6 @@ export type Experience = {
   end: string;
   current: boolean;
   bullets: string[];
-  projects: ExperienceProject[];
 };
 
 export type Education = {
