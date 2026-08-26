@@ -29,6 +29,11 @@ const emptyContact = {
 };
 
 const emptyRoleProject = (): ExperienceProject => ({ summary: "", impact: "" });
+const PROJECT_BULLET_SEP = " — ";
+
+function projectBullet(item: ExperienceProject): string {
+  return [item.summary, item.impact].map((part) => part.trim()).filter(Boolean).join(PROJECT_BULLET_SEP);
+}
 
 const emptyExperience = (): Experience => ({
   title: "",
@@ -42,11 +47,18 @@ const emptyExperience = (): Experience => ({
 });
 
 function hydrateRoleProjects(role: Experience): ExperienceProject[] {
-  if (role.projects?.length) return role.projects;
-  return role.bullets
+  const filled = (role.projects ?? []).filter((item) => item.summary.trim() || item.impact.trim());
+  if (filled.length) return filled;
+  return (role.bullets ?? [])
     .map((item) => item.trim())
     .filter(Boolean)
-    .map((summary) => ({ summary, impact: "" }));
+    .map((bullet) => {
+      const at = bullet.indexOf(PROJECT_BULLET_SEP);
+      if (at >= 0) {
+        return { summary: bullet.slice(0, at).trim(), impact: bullet.slice(at + PROJECT_BULLET_SEP.length).trim() };
+      }
+      return { summary: bullet, impact: "" };
+    });
 }
 
 function hydrateProfile(profile: Profile): Profile {
@@ -97,13 +109,12 @@ export default function ProfilePage() {
         ...profile,
         skills: profile.skills.map((item) => item.trim()).filter(Boolean),
         additional_skills: profile.additional_skills.map((item) => item.trim()).filter(Boolean),
-        experience: profile.experience.map((role) => ({
-          ...role,
-          bullets: [],
-          projects: (role.projects ?? [])
+        experience: profile.experience.map((role) => {
+          const projects = (role.projects ?? [])
             .map((item) => ({ summary: item.summary.trim(), impact: item.impact.trim() }))
-            .filter((item) => item.summary || item.impact),
-        })),
+            .filter((item) => item.summary || item.impact);
+          return { ...role, projects, bullets: projects.map(projectBullet) };
+        }),
         projects: profile.projects.map((project) => ({
           ...project,
           bullets: project.bullets.map((item) => item.trim()).filter(Boolean),

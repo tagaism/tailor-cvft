@@ -39,8 +39,11 @@ def _iter_profile_text(profile: Profile):
     yield from profile.additional_skills
     for role in profile.experience:
         yield from (role.title, role.company, role.location, role.start, role.end, *role.bullets)
-        for item in role.projects:
-            yield from (item.summary, item.impact)
+        for project in role.projects:
+            if project.summary:
+                yield project.summary
+            if project.impact:
+                yield project.impact
     for edu in profile.education:
         yield from (edu.school, edu.degree, edu.field, edu.start, edu.end, edu.location, edu.details)
     for project in profile.projects:

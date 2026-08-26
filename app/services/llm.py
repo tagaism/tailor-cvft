@@ -48,7 +48,7 @@ PROFILE_SCHEMA_HINT = """
       "end": "",
       "current": false,
       "projects": [{"summary": "what you did", "impact": "outcome or metric"}],
-      "bullets": []
+      "bullets": ["what you did — outcome or metric"]
     }
   ],
   "education": [
@@ -522,7 +522,8 @@ def extract_profile_from_cv(raw_text: str) -> tuple[Profile, str]:
         "Do not invent facts. If a field is missing, use an empty string or empty array. "
         "Keep dates as originally written. Split experience into distinct roles. "
         "For each role, list projects with a short summary and impact (metrics or outcomes if present). "
-        "Leave impact empty if unknown. Do not invent facts."
+        "Leave impact empty if unknown. Set bullets to the same items as 'summary — impact' (or just summary). "
+        "Do not invent facts."
     )
     user = (
         f"JSON schema:\n{PROFILE_SCHEMA_HINT}\n\n"
@@ -563,8 +564,11 @@ def tailor_pack(
         "Use [] if none.\n\n"
         "CONTENT GUIDELINES:\n"
         "- summary: 2–4 sentences, tailored, facts only. Placed under the name and above Technical Skills.\n"
-        "- Up to two pages friendly: 3–6 bullets per recent role; fewer for older roles.\n"
-        "- Experience: 3–6 bullets for recent roles, fewer for older roles. Strong action verbs, truthful only.\n"
+        "- Up to two pages friendly: 3–6 items per recent role; fewer for older roles.\n"
+        "- Experience: 3–6 projects for recent roles, fewer for older. Each project has summary (what you did) "
+        "and impact (outcome or metric already in the profile; else empty). "
+        "bullets is the CV display list derived as 'summary — impact' (or just summary) from those projects. "
+        "Do not invent extra bullets or keep leftover bullets that are not those projects.\n"
         "- Cover letter: 180–250 words, plain text paragraphs, specific to this job and company, no fabricated claims.\n"
         "- Match analysis must be honest and concise.\n\n"
         "OUTPUT:\n"
@@ -654,7 +658,8 @@ def tailor_shokumu_pack(
         "- 雇用形態が不明なら「正社員として勤務」。事業内容は分かる範囲のみ。\n"
         "- 和名が不明ならプロフィールの氏名をそのまま使う。会社名はプロフィールの表記のまま。\n"
         "- 職務経歴は会社ごとにまとめる。各社の assignments に期間・部署・【職務内容】・【ポイント】を書く。\n"
-        "- 各社 experience.projects の summary を【職務内容】、impact を【ポイント】に対応させる。\n"
+        "- 各社 experience.projects の summary を【職務内容】、impact を【ポイント】に対応させる。"
+        "projects が空なら bullets を同じ事実として使う。bullets と projects を別事実にしない。\n"
         "- 職務内容は具体。ポイントはプロフィールにある成果・数値のみ。\n"
         "- PCスキルはプロフィールのツールを name/level で。Officeに無いものは無理にWord/Excelにしない。\n"
         "- 資格は name と取得年月（不明なら空）。自己PRは＜見出し＞付き2テーマ程度。\n"
