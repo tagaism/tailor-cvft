@@ -9,7 +9,14 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import DeleteOutline from "@mui/icons-material/DeleteOutline";
 import { api } from "../api";
-import type { Certification, Education, Experience, Profile, Project } from "../types";
+import type {
+  Certification,
+  Education,
+  Experience,
+  ExperienceProject,
+  Profile,
+  Project,
+} from "../types";
 
 const emptyContact = {
   full_name: "",
@@ -21,6 +28,13 @@ const emptyContact = {
   website: "",
 };
 
+const emptyRoleProject = (): ExperienceProject => ({ summary: "", impact: "" });
+const PROJECT_BULLET_SEP = " — ";
+
+function projectBullet(item: ExperienceProject): string {
+  return [item.summary, item.impact].map((part) => part.trim()).filter(Boolean).join(PROJECT_BULLET_SEP);
+}
+
 const emptyExperience = (): Experience => ({
   title: "",
   company: "",
@@ -29,7 +43,33 @@ const emptyExperience = (): Experience => ({
   end: "",
   current: false,
   bullets: [],
+  projects: [emptyRoleProject()],
 });
+
+function hydrateRoleProjects(role: Experience): ExperienceProject[] {
+  const filled = (role.projects ?? []).filter((item) => item.summary.trim() || item.impact.trim());
+  if (filled.length) return filled;
+  return (role.bullets ?? [])
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((bullet) => {
+      const at = bullet.indexOf(PROJECT_BULLET_SEP);
+      if (at >= 0) {
+        return { summary: bullet.slice(0, at).trim(), impact: bullet.slice(at + PROJECT_BULLET_SEP.length).trim() };
+      }
+      return { summary: bullet, impact: "" };
+    });
+}
+
+function hydrateProfile(profile: Profile): Profile {
+  return {
+    ...profile,
+    experience: profile.experience.map((role) => ({
+      ...role,
+      projects: hydrateRoleProjects(role),
+    })),
+  };
+}
 
 const emptyEducation = (): Education => ({
   school: "",
@@ -55,7 +95,7 @@ export default function ProfilePage() {
   useEffect(() => {
     api
       .profile()
-      .then((data) => setProfile(data.profile))
+      .then((data) => setProfile(hydrateProfile(data.profile)))
       .catch((err: Error) => setError(err.message));
   }, []);
 
@@ -69,17 +109,19 @@ export default function ProfilePage() {
         ...profile,
         skills: profile.skills.map((item) => item.trim()).filter(Boolean),
         additional_skills: profile.additional_skills.map((item) => item.trim()).filter(Boolean),
-        experience: profile.experience.map((role) => ({
-          ...role,
-          bullets: role.bullets.map((item) => item.trim()).filter(Boolean),
-        })),
+        experience: profile.experience.map((role) => {
+          const projects = (role.projects ?? [])
+            .map((item) => ({ summary: item.summary.trim(), impact: item.impact.trim() }))
+            .filter((item) => item.summary || item.impact);
+          return { ...role, projects, bullets: projects.map(projectBullet) };
+        }),
         projects: profile.projects.map((project) => ({
           ...project,
           bullets: project.bullets.map((item) => item.trim()).filter(Boolean),
         })),
       };
       const saved = await api.saveProfile(cleaned);
-      setProfile(saved.profile);
+      setProfile(hydrateProfile(saved.profile));
       setFlash("Profile saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save profile.");
@@ -98,7 +140,7 @@ export default function ProfilePage() {
     setError("");
     try {
       const data = await api.uploadProfile(file);
-      setProfile(data.profile);
+      setProfile(hydrateProfile(data.profile));
       setFlash("CV imported and merged into your profile. Review the fields below.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed.");
@@ -244,17 +286,85 @@ export default function ProfilePage() {
                 />
               </Grid>
               <Grid size={12}>
-                <TextField
-                  label="Bullets (one per line)"
-                  multiline
-                  minRows={3}
-                  value={role.bullets.join("\n")}
-                  onChange={(e) =>
-                    updateList(profile, setProfile, "experience", index, {
-                      bullets: e.target.value.split("\n"),
-                    })
-                  }
-                />
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="flex-start"
+                  gap={1}
+                  sx={{ mb: 1 }}
+                >
+                  <div>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 650 }}>
+                      Projects
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Summary of the work and its impact at this company.
+                    </Typography>
+                  </div>
+                  <Button
+                    type="button"
+                    size="small"
+                    sx={{ whiteSpace: "nowrap", flexShrink: 0 }}
+                    onClick={() =>
+                      updateList(profile, setProfile, "experience", index, {
+                        projects: [...(role.projects ?? []), emptyRoleProject()],
+                      })
+                    }
+                  >
+                    + Add project
+                  </Button>
+                </Stack>
+                {(role.projects ?? []).length === 0 ? (
+                  <Typography color="text.secondary" variant="body2">
+                    No projects yet. Add a summary and impact for this company.
+                  </Typography>
+                ) : (
+                  (role.projects ?? []).map((project, projectIndex) => (
+                    <Paper key={projectIndex} variant="outlined" sx={{ p: 1.5, mb: 1.5 }}>
+                      <Stack direction="row" justifyContent="flex-end">
+                        <IconButton
+                          aria-label="Remove project"
+                          onClick={() =>
+                            updateList(profile, setProfile, "experience", index, {
+                              projects: (role.projects ?? []).filter((_, i) => i !== projectIndex),
+                            })
+                          }
+                        >
+                          <DeleteOutline />
+                        </IconButton>
+                      </Stack>
+                      <Grid container spacing={2}>
+                        <Grid size={12}>
+                          <TextField
+                            label="Summary"
+                            multiline
+                            minRows={2}
+                            value={project.summary}
+                            onChange={(e) =>
+                              patchRoleProject(profile, setProfile, index, projectIndex, {
+                                summary: e.target.value,
+                              })
+                            }
+                          />
+                        </Grid>
+                        <Grid size={12}>
+                          <TextField
+                            label="Impact"
+                            multiline
+                            minRows={2}
+                            helperText="Outcomes, metrics, or what changed"
+                            value={project.impact}
+                            onChange={(e) =>
+                              patchRoleProject(profile, setProfile, index, projectIndex, {
+                                impact: e.target.value,
+                              })
+                            }
+                          />
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  ))
+                )}
               </Grid>
             </Grid>
           </Paper>
@@ -435,9 +545,25 @@ function RepeatHead({ title, onAdd }: { title: string; onAdd: () => void }) {
   return (
     <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 3, mb: 1 }}>
       <Typography variant="h2">{title}</Typography>
-      <Button onClick={onAdd}>+ Add</Button>
+      <Button type="button" onClick={onAdd}>
+        + Add
+      </Button>
     </Stack>
   );
+}
+
+function patchRoleProject(
+  profile: Profile,
+  setProfile: (profile: Profile) => void,
+  roleIndex: number,
+  projectIndex: number,
+  patch: Partial<ExperienceProject>,
+) {
+  const role = profile.experience[roleIndex];
+  const projects = (role.projects ?? []).map((item, i) =>
+    i === projectIndex ? { ...item, ...patch } : item,
+  );
+  updateList(profile, setProfile, "experience", roleIndex, { projects });
 }
 
 function updateList<K extends "experience" | "education" | "projects" | "certifications">(
