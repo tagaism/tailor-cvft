@@ -32,7 +32,6 @@ export default function JobDetailPage() {
   const [flash, setFlash] = useState("");
   const [saving, setSaving] = useState(false);
   const [building, setBuilding] = useState(false);
-  const [reasoningLines, setReasoningLines] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [cvStyle, setCvStyle] = useState<CvStyle>("times");
 
@@ -97,18 +96,16 @@ export default function JobDetailPage() {
   async function onBuild() {
     if (!job) return;
     setBuilding(true);
-    setReasoningLines([]);
     setError("");
     setFlash("");
     try {
-      const built = await api.buildJob(job.id, cvStyle, setReasoningLines);
+      const built = await api.buildJob(job.id, cvStyle);
       setJob(built);
       setFlash("Tailored pack is ready below.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Build failed.");
     } finally {
       setBuilding(false);
-      setReasoningLines([]);
     }
   }
 
@@ -310,41 +307,6 @@ export default function JobDetailPage() {
         <Button variant="contained" onClick={onBuild} disabled={!canBuild || building} startIcon={building ? <CircularProgress size={16} /> : undefined}>
           {building ? "Writing…" : "Build tailored pack"}
         </Button>
-        {building && (
-          <Box
-            aria-live="polite"
-            aria-label="Model reasoning"
-            sx={{
-              mt: 1.5,
-              px: 1.5,
-              py: 1,
-              height: "6.4em",
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "flex-end",
-              borderRadius: 1,
-              bgcolor: "action.hover",
-              border: "1px solid",
-              borderColor: "divider",
-            }}
-          >
-            <Typography
-              component="pre"
-              sx={{
-                m: 0,
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace',
-                fontSize: "0.8rem",
-                lineHeight: 1.45,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                color: "text.secondary",
-              }}
-            >
-              {reasoningLines.length ? reasoningLines.join("\n") : "Waiting for the model…"}
-            </Typography>
-          </Box>
-        )}
       </Paper>
 
       {job.generation && (
@@ -352,7 +314,7 @@ export default function JobDetailPage() {
           <Paper sx={{ p: 2.5 }} id="results">
             <Typography variant="h2">Match analysis</Typography>
             <Typography color="text.secondary" sx={{ mb: 2 }}>
-              Built {formatGenerationTime(job.generation.created_at)} UTC · {job.generation.model_name}
+              Built {job.generation.created_at?.slice(0, 16).replace("T", " ")} UTC · {job.generation.model_name}
             </Typography>
             {match?.matched_skills.length ? (
               <>
@@ -416,11 +378,6 @@ export default function JobDetailPage() {
                 <Typography variant="h2">
                   {job.generation.cv_style === "shokumu" ? "職務経歴書" : "Tailored CV"}
                 </Typography>
-                {job.generation.created_at && (
-                  <Typography color="text.secondary">
-                    Generated {formatGenerationTime(job.generation.created_at)} UTC
-                  </Typography>
-                )}
                 <Typography color="text.secondary">
                   Click the intro or a bullet in the preview to edit. Use B / I. Click outside to save.
                 </Typography>
@@ -488,9 +445,4 @@ export default function JobDetailPage() {
       </Dialog>
     </Stack>
   );
-}
-
-function formatGenerationTime(value: string | null | undefined): string {
-  if (!value) return "";
-  return value.slice(0, 16).replace("T", " ");
 }
