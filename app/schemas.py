@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class Contact(BaseModel):
@@ -25,6 +25,11 @@ def _string_list(value):
     return [str(item) for item in value if item is not None]
 
 
+class ExperienceProject(BaseModel):
+    summary: str = ""
+    impact: str = ""
+
+
 class Experience(BaseModel):
     title: str = ""
     company: str = ""
@@ -33,6 +38,7 @@ class Experience(BaseModel):
     end: str = ""
     current: bool = False
     bullets: list[str] = Field(default_factory=list)
+    projects: list[ExperienceProject] = Field(default_factory=list)
 
     @field_validator("current", mode="before")
     @classmethod
@@ -45,6 +51,36 @@ class Experience(BaseModel):
     @classmethod
     def _bullets(cls, value):
         return _string_list(value)
+
+    @field_validator("projects", mode="before")
+    @classmethod
+    def _projects(cls, value):
+        if not value:
+            return []
+        out = []
+        for item in value:
+            if isinstance(item, str):
+                text = item.strip()
+                if text:
+                    out.append({"summary": text, "impact": ""})
+            elif isinstance(item, dict):
+                out.append(item)
+        return out
+
+    @model_validator(mode="after")
+    def _sync_projects_and_bullets(self):
+        filled = [item for item in self.projects if item.summary.strip() or item.impact.strip()]
+        if filled:
+            self.projects = filled
+            self.bullets = [
+                " — ".join(part for part in [item.summary.strip(), item.impact.strip()] if part)
+                for item in filled
+            ]
+        elif self.bullets:
+            self.projects = [ExperienceProject(summary=item, impact="") for item in self.bullets if item.strip()]
+        else:
+            self.projects = []
+        return self
 
 
 class Education(BaseModel):
