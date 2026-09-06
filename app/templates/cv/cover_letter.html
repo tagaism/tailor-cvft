@@ -11,9 +11,14 @@
 {% endif %}
 <article class="letter"{% if job %} data-job-id="{{ job.id }}"{% endif %}>
   <div class="sender">
-    <h1>{{ cv.contact.full_name }}</h1>
+    <h1 class="cv-edit" data-path="contact.full_name">{{ cv.contact.full_name }}</h1>
     <p class="meta">
-      {{ [cv.contact.email, cv.contact.phone, cv.contact.location] | reject('equalto', '') | join(' · ') }}
+      {%- if job or cv.contact.email -%}
+        <span class="cv-edit" data-path="contact.email">{% if cv.contact.email %}{{ cv.contact.email }}{% endif %}</span>
+      {%- endif -%}
+      {%- set rest = [cv.contact.phone, cv.contact.location] | reject('equalto', '') | list -%}
+      {%- if rest and (job or cv.contact.email) %} · {% endif -%}
+      {{ rest | join(' · ') }}
     </p>
     {% if job %}
     <p class="meta">{{ job.title }}{% if job.company %} · {{ job.company }}{% endif %}</p>
@@ -24,7 +29,7 @@
   </div>
 </article>
 {% if job %}
-<script src="/static/cv-edit.js?v=delete3"></script>
+<script src="/static/cv-edit.js?v=save3"></script>
 {% endif %}
 {% if standalone %}
 </body>

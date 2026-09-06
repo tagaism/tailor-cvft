@@ -2,7 +2,7 @@
   if (window.__cvEditReady) return;
   window.__cvEditReady = true;
 
-  const roots = document.querySelectorAll(".cv[data-job-id], .letter[data-job-id]");
+  const roots = document.querySelectorAll(".cv[data-job-id], .letter[data-job-id], .shokumu[data-job-id]");
   if (!roots.length) return;
 
   const toolbar = document.createElement("div");
@@ -23,6 +23,10 @@
 
   function allowsLineBreak(el) {
     return el.classList.contains("intro") || el.classList.contains("letter-edit");
+  }
+
+  function isContactPath(path) {
+    return path === "contact.full_name" || path === "contact.email" || path === "name";
   }
 
   function placeToolbar(el) {
@@ -113,18 +117,104 @@
   document.addEventListener("pointerdown", onRemove, true);
   document.addEventListener("click", onRemove, true);
 
-  document.addEventListener("click", (event) => {
-    if (event.target.closest(".cv-remove")) return;
-    const item = event.target.closest("[data-path]");
-    if (!item || !item.closest(".cv[data-job-id], .letter[data-job-id]")) return;
-    if (active === item) return;
-    if (active) active.blur();
+  function syncContactFields(data, current) {
+    if (data.full_name) {
+      document.querySelectorAll("[data-path='contact.full_name'], [data-path='name']").forEach((el) => {
+        if (el !== current) el.textContent = data.full_name;
+      });
+      document.title = data.full_name;
+    }
+    if (data.email !== undefined) {
+      document.querySelectorAll("[data-path='contact.email']").forEach((el) => {
+        if (el !== current) el.textContent = data.email;
+      });
+    }
+    const jobRoot = current && current.closest("[data-job-id]");
+    const jobId = jobRoot ? jobRoot.getAttribute("data-job-id") : null;
+    if (jobId) {
+      try {
+        window.parent.postMessage({ type: "cv-contact-changed", jobId: Number(jobId) }, "*");
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  function persist(item) {
+    if (!item || item.dataset.saving === "1") return;
+    const path = item.getAttribute("data-path");
+    const html = item.innerHTML;
+    const jobId = jobIdFor(item);
+    if (!path || !jobId) return;
+    if (item.dataset.original !== undefined && html === item.dataset.original) return;
+    item.dataset.saving = "1";
+    fetch(`/jobs/${jobId}/cv-bullet`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ path, html }),
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("save failed");
+        return response.json();
+      })
+      .then((data) => {
+        if (data.html !== undefined) item.innerHTML = data.html;
+        item.dataset.original = item.innerHTML;
+        if (isContactPath(path)) syncContactFields(data, item);
+        item.classList.add("is-saved");
+        setTimeout(() => item.classList.remove("is-saved"), 700);
+      })
+      .catch(() => {
+        if (item.dataset.original !== undefined) item.innerHTML = item.dataset.original;
+        item.classList.add("is-error");
+        setTimeout(() => item.classList.remove("is-error"), 1200);
+      })
+      .finally(() => {
+        delete item.dataset.saving;
+      });
+  }
+
+  function commit(item) {
+    if (!item) return;
+    item.removeAttribute("contenteditable");
+    item.classList.remove("is-editing");
+    if (active === item) active = null;
+    hideToolbar();
+    persist(item);
+  }
+
+  function beginEdit(item) {
+    if (!item || active === item) return;
+    if (active) commit(active);
     active = item;
+    if (item.dataset.saving !== "1") item.dataset.original = item.innerHTML;
     item.setAttribute("contenteditable", "true");
     item.classList.add("is-editing");
     item.focus();
-    placeToolbar(item);
-    syncButtons();
+    if (!isContactPath(item.getAttribute("data-path"))) {
+      placeToolbar(item);
+      syncButtons();
+    } else {
+      hideToolbar();
+    }
+  }
+
+  document.addEventListener(
+    "pointerdown",
+    (event) => {
+      if (toolbar.contains(event.target)) return;
+      if (event.target.closest(".cv-remove")) return;
+      const item = event.target.closest("[data-path]");
+      if (active && item !== active) commit(active);
+    },
+    true
+  );
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".cv-remove")) return;
+    const item = event.target.closest("[data-path]");
+    if (!item || !item.closest(".cv[data-job-id], .letter[data-job-id], .shokumu[data-job-id]")) return;
+    beginEdit(item);
   });
 
   document.addEventListener("keyup", () => {
@@ -142,7 +232,7 @@
         document.execCommand("insertLineBreak", false, null);
         return;
       }
-      active.blur();
+      commit(active);
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
       event.preventDefault();
@@ -164,7 +254,7 @@
   document.addEventListener("focusin", (event) => {
     if (toolbar.contains(event.target)) return;
     if (active && event.target !== active && !active.contains(event.target)) {
-      active.blur();
+      commit(active);
     }
   });
 
@@ -177,32 +267,7 @@
         suppressBlur = false;
         return;
       }
-      item.removeAttribute("contenteditable");
-      item.classList.remove("is-editing");
-      if (active === item) active = null;
-      hideToolbar();
-      const path = item.getAttribute("data-path");
-      const html = item.innerHTML;
-      const jobId = jobIdFor(item);
-      if (!jobId) return;
-      fetch(`/jobs/${jobId}/cv-bullet`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ path, html }),
-      })
-        .then((response) => {
-          if (!response.ok) throw new Error("save failed");
-          return response.json();
-        })
-        .then((data) => {
-          if (data.html !== undefined) item.innerHTML = data.html;
-          item.classList.add("is-saved");
-          setTimeout(() => item.classList.remove("is-saved"), 700);
-        })
-        .catch(() => {
-          item.classList.add("is-error");
-          setTimeout(() => item.classList.remove("is-error"), 1200);
-        });
+      if (item.getAttribute("contenteditable") === "true") commit(item);
     },
     true
   );

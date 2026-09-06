@@ -53,6 +53,28 @@ def _usable_width(pdf: FPDF) -> float:
     return pdf.w - pdf.l_margin - pdf.r_margin
 
 
+def _ensure_space(pdf: FPDF, height: float) -> None:
+    """Start a new page if this block would leave a nearly empty remainder."""
+    if pdf.will_page_break(height):
+        pdf.add_page()
+
+
+def _cell_height(
+    pdf: FPDF,
+    width: float,
+    text: str,
+    *,
+    height: float = 5,
+    style: str = "",
+    size: float = 11,
+) -> float:
+    pdf.set_font("Times", style, size)
+    measured = float(
+        pdf.multi_cell(width, height, _safe(text or ""), dry_run=True, output="HEIGHT")
+    )
+    return max(measured, height)
+
+
 def _write(
     pdf: FPDF,
     text: str,
@@ -69,6 +91,8 @@ def _write(
     pdf.set_x(pdf.l_margin + indent)
     usable = _usable_width(pdf) - indent
     line_width = usable if width is None else width
+    _ensure_space(pdf, height * 2)
+    pdf.set_x(pdf.l_margin + indent)
     pdf.multi_cell(
         line_width,
         height,
@@ -89,6 +113,7 @@ def _write_rich(
     size: float = 11,
     br_extra: float = 0,
 ) -> None:
+    _ensure_space(pdf, height * 2.4)
     pdf.set_x(pdf.l_margin + indent)
     pdf.set_font("Times", "", size)
     if prefix:
@@ -109,31 +134,40 @@ def _write_rich(
 
 
 def _split_row(pdf: FPDF, left_top: str, left_bottom: str, right_top: str, right_bottom: str) -> None:
+    # Both columns are drawn from the same Y. If the left cell page-breaks,
+    # the right cell is painted at the previous page's Y on the next page.
     epw = _usable_width(pdf)
     left_w = epw * 0.64
     right_w = epw - left_w
     x0 = pdf.l_margin
-    y0 = pdf.get_y()
+    line_h = 5.0
+    block_h = (
+        max(
+            _cell_height(pdf, left_w, (left_top or "").upper(), height=line_h, style="B")
+            + _cell_height(pdf, left_w, left_bottom or "", height=line_h),
+            _cell_height(pdf, right_w, right_top or "", height=line_h, style="B")
+            + _cell_height(pdf, right_w, right_bottom or "", height=line_h, style="I"),
+        )
+        + 0.4
+    )
+    _ensure_space(pdf, block_h)
 
+    y0 = pdf.get_y()
     pdf.set_xy(x0, y0)
     pdf.set_font("Times", "B", 11)
-    pdf.multi_cell(left_w, 5, _safe((left_top or "").upper()), new_x="LMARGIN", new_y="NEXT")
-    y_company = pdf.get_y()
-    pdf.set_xy(x0, y_company)
+    pdf.multi_cell(left_w, line_h, _safe((left_top or "").upper()), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_xy(x0, pdf.get_y())
     pdf.set_font("Times", "", 11)
-    pdf.multi_cell(left_w, 5, _safe(left_bottom or ""), new_x="LMARGIN", new_y="NEXT")
-    y_left = pdf.get_y()
+    pdf.multi_cell(left_w, line_h, _safe(left_bottom or ""), new_x="LMARGIN", new_y="NEXT")
 
     pdf.set_xy(x0 + left_w, y0)
     pdf.set_font("Times", "B", 11)
-    pdf.multi_cell(right_w, 5, _safe(right_top or ""), align="R", new_x="LMARGIN", new_y="NEXT")
-    y_loc = pdf.get_y()
-    pdf.set_xy(x0 + left_w, y_loc)
+    pdf.multi_cell(right_w, line_h, _safe(right_top or ""), align="R", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_xy(x0 + left_w, pdf.get_y())
     pdf.set_font("Times", "I", 11)
-    pdf.multi_cell(right_w, 5, _safe(right_bottom or ""), align="R", new_x="LMARGIN", new_y="NEXT")
-    y_right = pdf.get_y()
+    pdf.multi_cell(right_w, line_h, _safe(right_bottom or ""), align="R", new_x="LMARGIN", new_y="NEXT")
 
-    pdf.set_xy(x0, max(y_left, y_right) + 0.4)
+    pdf.set_xy(x0, y0 + block_h)
 
 
 def cv_to_pdf(cv: Profile) -> bytes:
@@ -159,6 +193,7 @@ def cv_to_pdf(cv: Profile) -> bytes:
         _write_rich(pdf, cv.summary, prefix="")
 
     def heading(title: str) -> None:
+        _ensure_space(pdf, 20)
         pdf.ln(2.2)
         _write(pdf, title.upper(), height=6, style="B", size=12)
         y_line = pdf.get_y()

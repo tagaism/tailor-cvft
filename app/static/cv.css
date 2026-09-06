@@ -25,6 +25,7 @@
   margin: 0.28rem 0 0;
 }
 .cv .contact-line a { color: inherit; text-decoration: none; }
+.cv h1.cv-edit { display: inline-block; min-width: 4rem; }
 .cv .intro {
   margin: 0.55rem 0 0.15rem;
   text-align: justify;
