@@ -169,6 +169,34 @@ def resolve_model(client: OpenAI | None = None) -> str:
     return chosen[0]
 
 
+_INSUFFICIENT_RE = re.compile(
+    r"credit|quota|billing|payment required|can only afford|insufficient",
+    re.I,
+)
+_URL_RE = re.compile(r"https?://\S+")
+
+
+def _status_error_text(exc: APIStatusError) -> str:
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            text = str(err["message"])
+        elif body.get("message"):
+            text = str(body["message"])
+        else:
+            text = exc.message or str(exc)
+    else:
+        text = exc.message or str(exc)
+    return _URL_RE.sub("", text).strip() or f"HTTP {exc.status_code}"
+
+
+def _is_insufficient_llm(exc: APIStatusError) -> bool:
+    if exc.status_code == 402:
+        return True
+    return bool(_INSUFFICIENT_RE.search(_status_error_text(exc)))
+
+
 def _friendly_connection_error(exc: Exception, llm: ResolvedLlm | None = None) -> str:
     llm = llm or _resolved()
     if isinstance(exc, APITimeoutError):
@@ -189,7 +217,20 @@ def _friendly_connection_error(exc: Exception, llm: ResolvedLlm | None = None) -
         )
         return f"Cannot reach {llm.label} at {llm.base_url}.{hint}"
     if isinstance(exc, APIStatusError):
-        return f"{llm.label} returned HTTP {exc.status_code}: {exc.message}"
+        detail = _status_error_text(exc)
+        if _is_insufficient_llm(exc):
+            logger.error(
+                "LLM insufficient credits: provider=%s status=%s %s",
+                llm.label,
+                exc.status_code,
+                detail,
+            )
+            return (
+                f"{llm.label} does not have enough credits for this request. "
+                "Add credits or switch provider in .env, then try Build again."
+            )
+        logger.warning("%s returned HTTP %s: %s", llm.label, exc.status_code, detail)
+        return f"{llm.label} returned HTTP {exc.status_code}: {detail}"
     return f"{llm.label} request failed: {exc}"
 
 
