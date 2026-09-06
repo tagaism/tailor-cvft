@@ -7,6 +7,11 @@ from typing import Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
+class ContactIdentity(BaseModel):
+    full_name: str = ""
+    email: str = ""
+
+
 class Contact(BaseModel):
     full_name: str = ""
     email: str = ""
@@ -15,6 +20,53 @@ class Contact(BaseModel):
     linkedin: str = ""
     github: str = ""
     website: str = ""
+    identities: list[ContactIdentity] = Field(default_factory=list)
+
+    @field_validator("identities", mode="before")
+    @classmethod
+    def _identities(cls, value):
+        if not value:
+            return []
+        out = []
+        for item in value:
+            if isinstance(item, str):
+                text = item.strip()
+                if text:
+                    out.append({"full_name": text, "email": ""})
+            elif isinstance(item, dict):
+                out.append(item)
+        return out
+
+    @model_validator(mode="after")
+    def _sync_identities(self):
+        filled = [
+            item for item in self.identities if item.full_name.strip() or item.email.strip()
+        ]
+        if filled:
+            self.identities = filled
+            self.full_name = filled[0].full_name.strip()
+            self.email = filled[0].email.strip()
+        elif self.full_name.strip() or self.email.strip():
+            self.identities = [
+                ContactIdentity(full_name=self.full_name.strip(), email=self.email.strip())
+            ]
+        else:
+            self.identities = []
+        return self
+
+    def choose_identity(self, index: int) -> ContactIdentity:
+        filled = list(self.identities)
+        if not filled:
+            chosen = ContactIdentity(full_name=self.full_name.strip(), email=self.email.strip())
+            if chosen.full_name or chosen.email:
+                self.identities = [chosen]
+            return chosen
+        idx = index if 0 <= index < len(filled) else 0
+        chosen = filled[idx]
+        self.identities = [chosen, *[item for i, item in enumerate(filled) if i != idx]]
+        self.full_name = chosen.full_name.strip()
+        self.email = chosen.email.strip()
+        return chosen
 
 
 def _string_list(value):
@@ -127,7 +179,10 @@ class Profile(BaseModel):
         return _string_list(value)
 
     def is_ready(self) -> bool:
-        has_name = bool(self.contact.full_name.strip())
+        has_name = bool(
+            self.contact.full_name.strip()
+            or any(item.full_name.strip() for item in self.contact.identities)
+        )
         has_substance = bool(
             self.experience
             or self.skills

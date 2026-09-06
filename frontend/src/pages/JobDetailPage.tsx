@@ -20,7 +20,61 @@ import { ApiError, api, apiOrigin } from "../api";
 import OpenableUrlField from "../components/OpenableUrlField";
 import StatusChip from "../components/StatusChip";
 import { JOB_NOT_FOUND, parseRouteId } from "../ids";
-import { parseCvStyle, type CvStyle, type Health, type Job } from "../types";
+import {
+  parseCvStyle,
+  type Contact,
+  type ContactIdentity,
+  type CvStyle,
+  type Generation,
+  type Health,
+  type Job,
+} from "../types";
+
+function identitiesFromContact(contact: Contact): ContactIdentity[] {
+  const existing = (contact.identities ?? []).filter(
+    (item) => item.full_name.trim() || item.email.trim(),
+  );
+  if (existing.length) return existing;
+  if (contact.full_name.trim() || contact.email.trim()) {
+    return [{ full_name: contact.full_name, email: contact.email }];
+  }
+  return [];
+}
+
+function identityLabel(item: ContactIdentity): string {
+  const name = item.full_name.trim();
+  const email = item.email.trim();
+  if (name && email) return `${name} · ${email}`;
+  return name || email;
+}
+
+function matchIdentityIndex(identities: ContactIdentity[], generation?: Generation | null): number {
+  if (!identities.length || !generation?.cv) return 0;
+  const cv = generation.cv as ProfileLike;
+  const name = (generation.cv_style === "shokumu" ? cv.name : cv.contact?.full_name) || "";
+  const email = cv.contact?.email || "";
+  const byBoth = identities.findIndex(
+    (item) =>
+      Boolean(name) &&
+      item.full_name.trim() === name.trim() &&
+      (!email || item.email.trim() === email.trim()),
+  );
+  if (byBoth >= 0) return byBoth;
+  if (email) {
+    const byEmail = identities.findIndex((item) => item.email.trim() === email.trim());
+    if (byEmail >= 0) return byEmail;
+  }
+  if (name) {
+    const byName = identities.findIndex((item) => item.full_name.trim() === name.trim());
+    if (byName >= 0) return byName;
+  }
+  return 0;
+}
+
+type ProfileLike = {
+  name?: string;
+  contact?: { full_name?: string; email?: string };
+};
 
 export default function JobDetailPage() {
   const { id } = useParams();
@@ -35,9 +89,18 @@ export default function JobDetailPage() {
   const [reasoningLines, setReasoningLines] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [cvStyle, setCvStyle] = useState<CvStyle>("times");
+  const [identities, setIdentities] = useState<ContactIdentity[]>([]);
+  const [identityIndex, setIdentityIndex] = useState(0);
 
   useEffect(() => {
     api.health().then((data) => setStatuses(data.statuses)).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    api
+      .profile()
+      .then((data) => setIdentities(identitiesFromContact(data.profile.contact)))
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -61,6 +124,11 @@ export default function JobDetailPage() {
       cancelled = true;
     };
   }, [jobId]);
+
+  useEffect(() => {
+    if (!identities.length || !job) return;
+    setIdentityIndex(matchIdentityIndex(identities, job.generation));
+  }, [job?.id, job?.generation?.id, identities]);
 
   function patch<K extends keyof Job>(key: K, value: Job[K]) {
     if (!job) return;
@@ -101,7 +169,7 @@ export default function JobDetailPage() {
     setError("");
     setFlash("");
     try {
-      const built = await api.buildJob(job.id, cvStyle, setReasoningLines);
+      const built = await api.buildJob(job.id, cvStyle, identityIndex, setReasoningLines);
       setJob(built);
       setFlash("Tailored pack is ready below.");
     } catch (err) {
@@ -292,20 +360,37 @@ export default function JobDetailPage() {
         <Typography color="text.secondary" sx={{ my: 1 }}>
           Uses your saved profile and this job text. Local models often take 3–10 minutes. Leave this tab open.
         </Typography>
-        <TextField
-          select
-          label="CV style"
-          value={cvStyle}
-          onChange={(e) => setCvStyle(e.target.value as CvStyle)}
-          sx={{ maxWidth: 360, mb: 2 }}
-        >
-          <MenuItem value="times">Times CV (English)</MenuItem>
-          <MenuItem value="shokumu">職務経歴書 (Japanese)</MenuItem>
-        </TextField>
+        <Stack direction={{ xs: "column", sm: "row" }} gap={2} sx={{ mb: 2 }}>
+          <TextField
+            select
+            label="CV style"
+            value={cvStyle}
+            onChange={(e) => setCvStyle(e.target.value as CvStyle)}
+            sx={{ minWidth: 240, maxWidth: 360 }}
+          >
+            <MenuItem value="times">Times CV (English)</MenuItem>
+            <MenuItem value="shokumu">職務経歴書 (Japanese)</MenuItem>
+          </TextField>
+          {identities.length > 0 && (
+            <TextField
+              select
+              label="Contact"
+              value={String(Math.min(identityIndex, identities.length - 1))}
+              onChange={(e) => setIdentityIndex(Number(e.target.value))}
+              sx={{ minWidth: 260, flex: 1, maxWidth: 480 }}
+            >
+              {identities.map((item, index) => (
+                <MenuItem key={`${item.email}-${index}`} value={String(index)}>
+                  {identityLabel(item)}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+        </Stack>
         <Typography color="text.secondary" sx={{ mb: 2 }}>
           {cvStyle === "shokumu"
-            ? "Writes a 職務経歴書 and 志望動機 in Japanese from your English profile. Facts only."
-            : "Writes a Times-style CV and English cover letter."}
+            ? "Writes a 職務経歴書 and 志望動機 in Japanese from your English profile. Facts only. Contact name and email come from the pair you select."
+            : "Writes a Times-style CV and English cover letter. Contact name and email come from the pair you select."}
         </Typography>
         <Button variant="contained" onClick={onBuild} disabled={!canBuild || building} startIcon={building ? <CircularProgress size={16} /> : undefined}>
           {building ? "Writing…" : "Build tailored pack"}

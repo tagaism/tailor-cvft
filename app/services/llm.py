@@ -23,6 +23,7 @@ _CV_TEXT_LIMIT = 20000
 PROFILE_SCHEMA_HINT = """
 {
   "contact": {
+    "identities": [{"full_name": "Name as written", "email": "matching@email"}],
     "full_name": "",
     "email": "",
     "phone": "",
@@ -523,6 +524,7 @@ def extract_profile_from_cv(raw_text: str) -> tuple[Profile, str]:
         "Keep dates as originally written. Split experience into distinct roles. "
         "For each role, list projects with a short summary and impact (metrics or outcomes if present). "
         "Leave impact empty if unknown. Set bullets to the same items as 'summary — impact' (or just summary). "
+        "Put every name/email pair in contact.identities (legal name, English name, aliases), each name bound to its email. "
         "Do not invent facts."
     )
     user = (
@@ -656,7 +658,7 @@ def tailor_shokumu_pack(
         "- プロフィールにある事実のみ。雇用主・役職・年月・学位・数値・資本金・売上・従業員数・上場を捏造しない。\n"
         "- 不明な会社概要（資本金・売上高・従業員数・上場）は空文字。\n"
         "- 雇用形態が不明なら「正社員として勤務」。事業内容は分かる範囲のみ。\n"
-        "- 和名が不明ならプロフィールの氏名をそのまま使う。会社名はプロフィールの表記のまま。\n"
+        "- 氏名は contact.full_name を使う（ユーザーが選んだ連絡先）。会社名はプロフィールの表記のまま。\n"
         "- 職務経歴は会社ごとにまとめる。各社の assignments に期間・部署・【職務内容】・【ポイント】を書く。\n"
         "- 各社 experience.projects の summary を【職務内容】、impact を【ポイント】に対応させる。"
         "projects が空なら bullets を同じ事実として使う。bullets と projects を別事実にしない。\n"

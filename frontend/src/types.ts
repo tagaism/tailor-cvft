@@ -25,6 +25,11 @@ export type Health = {
   statuses: StatusOption[];
 };
 
+export type ContactIdentity = {
+  full_name: string;
+  email: string;
+};
+
 export type Contact = {
   full_name: string;
   email: string;
@@ -33,6 +38,7 @@ export type Contact = {
   linkedin: string;
   github: string;
   website: string;
+  identities: ContactIdentity[];
 };
 
 export type ExperienceProject = {
