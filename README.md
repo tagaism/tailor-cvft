@@ -241,13 +241,15 @@ cd frontend && npm install            # eslint
 ./scripts/lint.sh
 ```
 
-Point Git at `.githooks` so **`git push` runs the same checks** and refuses to push if they fail:
+Point Git at `.githooks` so **`git commit` checks the message**, **`git push` checks the branch name**, then runs the linters. A bad name or message is rejected.
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-`SKIP=1 git push` is not wired; if you need to bypass, use `git push --no-verify`.
+Branch names look like `feat/multiple-contacts`. Commit subjects look like `feat: add multiple contacts to the profile`. Full rules: [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Bypass with `git commit --no-verify` / `git push --no-verify` only if you must.
 
 ## Stack
 

@@ -1,5 +1,16 @@
 #!/usr/bin/env bash
-# Runs frontend + backend linters before git push.
+# Check branch names on refs being pushed, then run frontend + backend linters.
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
+
+while read -r _local_ref local_sha remote_ref _remote_sha; do
+  [[ -z "${local_sha:-}" ]] && continue
+  [[ "$local_sha" =~ ^0+$ ]] && continue
+  case "$remote_ref" in
+    refs/heads/*)
+      "$ROOT/scripts/check-branch-name.sh" "${remote_ref#refs/heads/}" || exit 1
+      ;;
+  esac
+done
+
 exec "$ROOT/scripts/lint.sh"
