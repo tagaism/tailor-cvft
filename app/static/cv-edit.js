@@ -59,7 +59,62 @@
     suppressBlur = false;
   });
 
+  function reindexList(section) {
+    const prefix = section.getAttribute("data-cv-list");
+    if (!prefix) return;
+    section.querySelectorAll("[data-delete]").forEach((el, index) => {
+      el.setAttribute("data-delete", `${prefix}.${index}`);
+      const edit = el.querySelector("[data-path]");
+      if (edit) edit.setAttribute("data-path", `${prefix}.${index}`);
+    });
+  }
+
+  function deleteItem(item) {
+    const path = item.getAttribute("data-delete");
+    const jobId = jobIdFor(item);
+    if (!path || !jobId || item.dataset.deleting) return;
+    item.dataset.deleting = "1";
+    const section = item.closest("[data-cv-list]");
+    fetch(`/jobs/${jobId}/cv-bullet`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ path, html: "", delete: true }),
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("delete failed");
+        return response.json();
+      })
+      .then(() => {
+        if (active && item.contains(active)) {
+          active = null;
+          hideToolbar();
+        }
+        item.remove();
+        if (!section) return;
+        reindexList(section);
+        if (!section.querySelector("[data-delete]")) section.remove();
+      })
+      .catch(() => {
+        delete item.dataset.deleting;
+        item.classList.add("is-error");
+        setTimeout(() => item.classList.remove("is-error"), 1200);
+      });
+  }
+
+  function onRemove(event) {
+    const remove = event.target.closest(".cv-remove");
+    if (!remove) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const row = remove.closest("[data-delete]");
+    if (row && row.closest(".cv[data-job-id]")) deleteItem(row);
+  }
+
+  document.addEventListener("pointerdown", onRemove, true);
+  document.addEventListener("click", onRemove, true);
+
   document.addEventListener("click", (event) => {
+    if (event.target.closest(".cv-remove")) return;
     const item = event.target.closest("[data-path]");
     if (!item || !item.closest(".cv[data-job-id], .letter[data-job-id]")) return;
     if (active === item) return;

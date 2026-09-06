@@ -77,8 +77,11 @@ def letter_html(value: str) -> str:
     return sanitize_rich(text.replace("\n", "<br>"))
 
 
+_DELETE_ROOTS = frozenset({"certifications", "additional_skills"})
+
+
 def apply_cv_path(cv: dict[str, Any], path: str, value: str) -> None:
-    if not re.fullmatch(r"[a-zA-Z0-9]+(?:\.[a-zA-Z0-9]+)*", path or ""):
+    if not re.fullmatch(r"[a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)*", path or ""):
         raise ValueError("Invalid path.")
     parts = path.split(".")
     node: Any = cv
@@ -88,6 +91,21 @@ def apply_cv_path(cv: dict[str, Any], path: str, value: str) -> None:
     last = parts[-1]
     key = int(last) if last.isdigit() else last
     node[key] = value
+
+
+def delete_cv_path(cv: dict[str, Any], path: str) -> None:
+    if not re.fullmatch(r"[a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)*", path or ""):
+        raise ValueError("Invalid path.")
+    parts = path.split(".")
+    if len(parts) != 2 or parts[0] not in _DELETE_ROOTS or not parts[1].isdigit():
+        raise ValueError("Can only remove a certification or additional skill.")
+    items = cv.get(parts[0])
+    if not isinstance(items, list):
+        raise ValueError("Path does not point to a list.")
+    index = int(parts[1])
+    if index < 0 or index >= len(items):
+        raise ValueError("Index out of range.")
+    items.pop(index)
 
 
 def rich_tokens(value: str) -> list[tuple[str, str]]:

@@ -508,6 +508,7 @@ export default function JobDetailPage() {
                 )}
                 <Typography color="text.secondary">
                   Click the intro or a bullet in the preview to edit. Use B / I. Click outside to save.
+                  Hover a certification or additional skill and click × to remove it.
                 </Typography>
               </Box>
               <Stack direction="row" gap={1}>
