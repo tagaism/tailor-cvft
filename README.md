@@ -35,13 +35,47 @@ The default LLM is [LM Studio](https://lmstudio.ai) on your machine. You can poi
    CV PDF    Cover letter   Match
 ```
 
+## Screenshots
+
+Personal names, emails, phone numbers, and profile URLs are replaced with dummy values.
+
+<p align="center">
+  <img src="docs/screenshots/positions.png" alt="Positions: add a job and track applications" width="900">
+</p>
+
+**Positions** — paste a posting, filter by status, open a role to build a pack.
+
+<p align="center">
+  <img src="docs/screenshots/profile.png" alt="Profile contact with multiple name and email pairs" width="900">
+</p>
+
+**Profile** — one source of truth. Add as many **name + email** pairs as you apply under; each name is bound to its email.
+
+<p align="center">
+  <img src="docs/screenshots/job-build.png" alt="Build tailored pack with CV style and contact select" width="900">
+</p>
+
+**Build tailored pack** — pick Times CV (English) or 職務経歴書 (Japanese), then which contact pair to print on that CV. Match analysis sits underneath.
+
+<p align="center">
+  <img src="docs/screenshots/job-cv.png" alt="Tailored Times CV preview" width="900">
+</p>
+
+**Tailored CV** — Times layout in the page. Click the intro or a bullet to edit; download PDF when it looks right.
+
+<p align="center">
+  <img src="docs/screenshots/companies.png" alt="Companies list" width="900">
+</p>
+
+**Companies** — employers stay linked when you rename them.
+
 ## Why this shape
 
 | You want | tailor-cvft does |
 | --- | --- |
-| One profile, many applications | Upload a CV once, edit it, reuse it |
-| A CV that reads like *that* job | Build a pack under the position, not a generic rewrite |
-| A paper look, not a SaaS card | Google-Doc-style Times layout: intro, technical skills, experience, education |
+| One profile, many applications | Upload a CV once, edit it, reuse it. Extra name/email pairs if you apply under more than one identity |
+| A CV that reads like *that* job | Build a pack under the position, not a generic rewrite. Pick the contact pair for that pack |
+| A paper look, not a SaaS card | Times English CV, or 職務経歴書; intro, technical skills, experience, education |
 | Tracking without a CRM | Company records + application statuses on each role |
 | Privacy | API key stays in `.env`. Local inference by default; a cloud provider sees profile + job text |
 
@@ -53,14 +87,16 @@ The app UI is React + Material UI at [http://127.0.0.1:5173](http://127.0.0.1:51
 
 ```text
 /jobs            Positions — add a posting, filter by status
-/jobs/{id}       Source + status + Build tailored pack + results
+/jobs/{id}       Source + status + Build tailored pack (style + contact) + results
 /companies       Employers (created when you name a company)
-/profile         Contact, experience, upload PDF / DOCX / TXT
+/profile         Contact (name+email pairs), experience, upload PDF / DOCX / TXT
 /api/...         JSON API (health, jobs, profile, companies)
 /health          Liveness probe (used by Docker)
 ```
 
 **Add a position** with company name, URL (optional), job description, required skills, desired skills, and notes.
+
+**Build** with **CV style** (`Times CV` or `職務経歴書`) and **Contact** (which name/email pair to print). The first pair is the default.
 
 **Statuses**
 
@@ -145,9 +181,9 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173). With Docker you can skip th
 
 ## First session
 
-1. **Profile** — upload a CV or fill the form.
+1. **Profile** — upload a CV or fill the form. Add extra name/email pairs if you apply under more than one identity.
 2. **Positions** — add the job.
-3. Open the role → **Build tailored pack**.
+3. Open the role → pick **CV style** and **Contact** → **Build tailored pack**.
 4. Leave the tab open. Local models often take **3–10 minutes**.
 5. Preview on the page. Click the intro, a CV bullet, or the cover letter to edit; **B** / **I** for bold and italic; click outside to save.
 6. Download the CV / letter PDFs.

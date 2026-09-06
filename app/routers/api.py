@@ -16,7 +16,7 @@ from app.db import get_db
 from app.forms import parse_skill_text
 from app.models import Company, Generation, Job
 from app.profile_store import load_profile, save_profile
-from app.schemas import APPLICATION_STATUSES, ApplicationStatus, CvStyle, Profile
+from app.schemas import APPLICATION_STATUSES, ApplicationStatus, ContactIdentity, CvStyle, Profile, ShokumuPack, TailorPack
 from app.serializers import company_payload, job_payload
 from app.services.companies import apply_status, get_or_create_company, link_job_company, normalize_company_name
 from app.services.llm import LLMError, extract_profile_from_cv, llm_health, tailor_pack, tailor_shokumu_pack
@@ -223,6 +223,16 @@ async def api_refetch_job(job_id: int, db: Session = Depends(get_db)):
     return {**job_payload(job, detail=True), "profile_ready": load_profile().is_ready()}
 
 
+def _stamp_pack_identity(pack: TailorPack | ShokumuPack, identity: ContactIdentity) -> None:
+    name = identity.full_name.strip()
+    email = identity.email.strip()
+    if isinstance(pack, ShokumuPack):
+        pack.cv.name = name or pack.cv.name
+        return
+    pack.cv.contact.full_name = name
+    pack.cv.contact.email = email
+
+
 def _save_generation(db: Session, job: Job, pack, model: str, style: str) -> dict:
     generation = Generation(
         job_id=job.id,
@@ -248,6 +258,7 @@ async def api_build_job(
     request: Request,
     job_id: int,
     style: str = CvStyle.times.value,
+    identity: int = 0,
     db: Session = Depends(get_db),
 ):
     job = db.get(Job, job_id)
@@ -261,6 +272,7 @@ async def api_build_job(
     style = (style or CvStyle.times.value).strip()
     if style not in {item.value for item in CvStyle}:
         _error("Unknown CV style. Use times or shokumu.")
+    chosen = profile.contact.choose_identity(identity)
     tailor = tailor_shokumu_pack if style == CvStyle.shokumu.value else tailor_pack
     source_text = job.source_text
     notes = job.notes
@@ -283,6 +295,7 @@ async def api_build_job(
             )
         except LLMError as exc:
             _error(str(exc))
+        _stamp_pack_identity(pack, chosen)
         return _save_generation(db, job, pack, model, style)
 
     events: queue.Queue = queue.Queue()
@@ -330,6 +343,7 @@ async def api_build_job(
                 await worker
                 return
             elif kind == "ok":
+                _stamp_pack_identity(item["pack"], chosen)
                 payload = _save_generation(db, job, item["pack"], item["model"], style)
                 yield _sse({"type": "done", "job": payload})
                 await worker

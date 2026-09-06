@@ -34,6 +34,8 @@ def _profile_blob(profile: Profile) -> str:
 def _iter_profile_text(profile: Profile):
     c = profile.contact
     yield from (c.full_name, c.email, c.phone, c.location, c.linkedin, c.github, c.website)
+    for item in c.identities:
+        yield from (item.full_name, item.email)
     yield profile.summary
     yield from profile.skills
     yield from profile.additional_skills

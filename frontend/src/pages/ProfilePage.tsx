@@ -11,6 +11,7 @@ import DeleteOutline from "@mui/icons-material/DeleteOutline";
 import { api } from "../api";
 import type {
   Certification,
+  ContactIdentity,
   Education,
   Experience,
   ExperienceProject,
@@ -26,7 +27,10 @@ const emptyContact = {
   linkedin: "",
   github: "",
   website: "",
+  identities: [] as ContactIdentity[],
 };
+
+const emptyIdentity = (): ContactIdentity => ({ full_name: "", email: "" });
 
 const emptyRoleProject = (): ExperienceProject => ({ summary: "", impact: "" });
 const PROJECT_BULLET_SEP = " — ";
@@ -61,9 +65,25 @@ function hydrateRoleProjects(role: Experience): ExperienceProject[] {
     });
 }
 
+function hydrateIdentities(contact: Profile["contact"]): ContactIdentity[] {
+  const existing = (contact.identities ?? []).filter(
+    (item) => item.full_name.trim() || item.email.trim(),
+  );
+  if (existing.length) return existing;
+  if (contact.full_name.trim() || contact.email.trim()) {
+    return [{ full_name: contact.full_name, email: contact.email }];
+  }
+  return [emptyIdentity()];
+}
+
 function hydrateProfile(profile: Profile): Profile {
   return {
     ...profile,
+    contact: {
+      ...emptyContact,
+      ...profile.contact,
+      identities: hydrateIdentities(profile.contact),
+    },
     experience: profile.experience.map((role) => ({
       ...role,
       projects: hydrateRoleProjects(role),
@@ -72,8 +92,18 @@ function hydrateProfile(profile: Profile): Profile {
 }
 
 function cleanProfile(profile: Profile): Profile {
+  const identities = (profile.contact.identities ?? [])
+    .map((item) => ({ full_name: item.full_name.trim(), email: item.email.trim() }))
+    .filter((item) => item.full_name || item.email);
+  const primary = identities[0] ?? { full_name: "", email: "" };
   return {
     ...profile,
+    contact: {
+      ...profile.contact,
+      identities,
+      full_name: primary.full_name,
+      email: primary.email,
+    },
     skills: profile.skills.map((item) => item.trim()).filter(Boolean),
     additional_skills: profile.additional_skills.map((item) => item.trim()).filter(Boolean),
     experience: profile.experience.map((role) => {
@@ -254,11 +284,75 @@ export default function ProfilePage() {
         <Typography variant="h2" sx={{ mb: 2 }}>
           Contact
         </Typography>
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={1} sx={{ mb: 1 }}>
+          <div>
+            <Typography variant="subtitle2" sx={{ fontWeight: 650 }}>
+              Names and emails
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Each name is bound to one email. Choose which pair to use when you build a tailored pack.
+            </Typography>
+          </div>
+          <Button
+            type="button"
+            size="small"
+            sx={{ whiteSpace: "nowrap", flexShrink: 0 }}
+            onClick={() => {
+              commitProfile({
+                ...profile,
+                contact: {
+                  ...profile.contact,
+                  identities: [...(profile.contact.identities ?? []), emptyIdentity()],
+                },
+              });
+            }}
+          >
+            + Add name and email
+          </Button>
+        </Stack>
+        {(profile.contact.identities ?? []).map((identity, index) => (
+          <Paper key={index} variant="outlined" sx={{ p: 1.5, mb: 1.5 }}>
+            <Stack direction="row" justifyContent="flex-end">
+              <IconButton
+                aria-label="Remove name and email"
+                disabled={(profile.contact.identities ?? []).length <= 1}
+                onClick={() => {
+                  commitProfile({
+                    ...profile,
+                    contact: {
+                      ...profile.contact,
+                      identities: (profile.contact.identities ?? []).filter((_, i) => i !== index),
+                    },
+                  });
+                  void saveNow("blur");
+                }}
+              >
+                <DeleteOutline />
+              </IconButton>
+            </Stack>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <AutoSaveField
+                  onSave={saveOnBlur}
+                  label="Full name"
+                  value={identity.full_name}
+                  onChange={(e) => patchIdentity(profile, commitProfile, index, { full_name: e.target.value })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <AutoSaveField
+                  onSave={saveOnBlur}
+                  label="Email"
+                  value={identity.email}
+                  onChange={(e) => patchIdentity(profile, commitProfile, index, { email: e.target.value })}
+                />
+              </Grid>
+            </Grid>
+          </Paper>
+        ))}
         <Grid container spacing={2}>
           {(
             [
-              ["full_name", "Full name"],
-              ["email", "Email"],
               ["phone", "Phone"],
               ["location", "Location"],
               ["linkedin", "LinkedIn"],
@@ -637,6 +731,18 @@ function RepeatHead({ title, onAdd }: { title: string; onAdd: () => void }) {
       </Button>
     </Stack>
   );
+}
+
+function patchIdentity(
+  profile: Profile,
+  setProfile: (profile: Profile) => void,
+  index: number,
+  patch: Partial<ContactIdentity>,
+) {
+  const identities = (profile.contact.identities ?? []).map((item, i) =>
+    i === index ? { ...item, ...patch } : item,
+  );
+  setProfile({ ...profile, contact: { ...profile.contact, identities } });
 }
 
 function patchRoleProject(

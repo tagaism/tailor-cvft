@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.schemas import (
     Certification,
     Contact,
+    ContactIdentity,
     Education,
     Experience,
     ExperienceProject,
@@ -31,10 +32,38 @@ def _union_preserve(existing: list[str], incoming: list[str]) -> list[str]:
     return out
 
 
+def _merge_identities(
+    current: list[ContactIdentity], incoming: list[ContactIdentity]
+) -> list[ContactIdentity]:
+    merged = [item.model_copy(deep=True) for item in current]
+    by_email = {_norm(item.email): item for item in merged if item.email.strip()}
+    by_name = {_norm(item.full_name): item for item in merged if item.full_name.strip()}
+    for item in incoming:
+        email_key = _norm(item.email)
+        name_key = _norm(item.full_name)
+        existing = None
+        if email_key and email_key in by_email:
+            existing = by_email[email_key]
+        elif name_key and name_key in by_name:
+            existing = by_name[name_key]
+        if existing:
+            existing.full_name = _prefer(existing.full_name, item.full_name)
+            existing.email = _prefer(existing.email, item.email)
+            continue
+        if not email_key and not name_key:
+            continue
+        copy = item.model_copy(deep=True)
+        merged.append(copy)
+        if email_key:
+            by_email[email_key] = copy
+        if name_key:
+            by_name[name_key] = copy
+    return merged
+
+
 def _merge_contact(current: Contact, incoming: Contact) -> Contact:
     return Contact(
-        full_name=_prefer(current.full_name, incoming.full_name),
-        email=_prefer(current.email, incoming.email),
+        identities=_merge_identities(current.identities, incoming.identities),
         phone=_prefer(current.phone, incoming.phone),
         location=_prefer(current.location, incoming.location),
         linkedin=_prefer(current.linkedin, incoming.linkedin),

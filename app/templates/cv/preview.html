@@ -95,25 +95,35 @@
   {% endif %}
 
   {% if cv.certifications %}
-  <h2>Certifications</h2>
-  <ul>
-    {% for cert in cv.certifications %}
-    <li>{{ cert.name }}{% if cert.issuer %} — {{ cert.issuer }}{% endif %}{% if cert.year %} ({{ cert.year }}){% endif %}</li>
-    {% endfor %}
-  </ul>
+  <section data-cv-list="certifications">
+    <h2>Certifications</h2>
+    <ul>
+      {% for cert in cv.certifications %}
+      <li class="cv-item" data-delete="certifications.{{ loop.index0 }}">
+        {{ cert.name }}{% if cert.issuer %} — {{ cert.issuer }}{% endif %}{% if cert.year %} ({{ cert.year }}){% endif %}
+        <button type="button" class="cv-remove" aria-label="Remove certification">&times;</button>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
   {% endif %}
 
   {% if cv.additional_skills %}
-  <h2>Additional Skills</h2>
-  <ul>
-    {% for item in cv.additional_skills %}
-    <li class="cv-bullet" data-path="additional_skills.{{ loop.index0 }}">{{ item | rich | safe }}</li>
-    {% endfor %}
-  </ul>
+  <section data-cv-list="additional_skills">
+    <h2>Additional Skills</h2>
+    <ul>
+      {% for item in cv.additional_skills %}
+      <li class="cv-item" data-delete="additional_skills.{{ loop.index0 }}">
+        <span class="cv-bullet" data-path="additional_skills.{{ loop.index0 }}">{{ item | rich | safe }}</span>
+        <button type="button" class="cv-remove" aria-label="Remove additional skill">&times;</button>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
   {% endif %}
 </article>
 {% if job %}
-<script src="/static/cv-edit.js"></script>
+<script src="/static/cv-edit.js?v=delete3"></script>
 {% endif %}
 {% if standalone %}
 </body>

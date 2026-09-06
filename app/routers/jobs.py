@@ -12,7 +12,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.db import get_db
 from app.deps import templates
 from app.models import Generation, Job
-from app.richtext import apply_cv_path, sanitize_rich
+from app.richtext import apply_cv_path, delete_cv_path, sanitize_rich
 from app.schemas import CvStyle, Profile, ShokumuCv
 from app.services.pdf import html_to_pdf, letter_to_pdf, shokumu_to_pdf
 
@@ -22,6 +22,7 @@ router = APIRouter()
 class BulletEdit(BaseModel):
     path: str = Field(min_length=1, max_length=200)
     html: str = Field(default="", max_length=16000)
+    delete: bool = False
 
 
 def _job_or_404(db: Session, job_id: int) -> Job:
@@ -57,6 +58,8 @@ async def save_cv_bullet(job_id: int, payload: BulletEdit, db: Session = Depends
     generation = job.latest_generation
     if generation is None:
         raise HTTPException(status_code=400, detail="Build a CV first.")
+    if payload.path == "cover_letter" and payload.delete:
+        raise HTTPException(status_code=400, detail="Cannot delete the cover letter this way.")
     cleaned = sanitize_rich(payload.html)
     if payload.path == "cover_letter":
         generation.cover_letter = cleaned
@@ -66,7 +69,10 @@ async def save_cv_bullet(job_id: int, payload: BulletEdit, db: Session = Depends
         return JSONResponse({"ok": True, "html": cleaned})
     cv = copy.deepcopy(generation.cv_json or {})
     try:
-        apply_cv_path(cv, payload.path, cleaned)
+        if payload.delete:
+            delete_cv_path(cv, payload.path)
+        else:
+            apply_cv_path(cv, payload.path, cleaned)
         if generation.cv_style == CvStyle.shokumu.value:
             ShokumuCv.model_validate(cv)
         else:
@@ -78,6 +84,8 @@ async def save_cv_bullet(job_id: int, payload: BulletEdit, db: Session = Depends
     job.updated_at = datetime.now(timezone.utc)
     db.add(generation)
     db.commit()
+    if payload.delete:
+        return JSONResponse({"ok": True, "deleted": True})
     return JSONResponse({"ok": True, "html": cleaned})
 
 

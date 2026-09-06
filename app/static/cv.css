@@ -65,6 +65,30 @@
 .cv .dates { font-style: italic; }
 .cv ul { margin: 0.15rem 0 0; padding-left: 1.25rem; }
 .cv li { margin: 0.08rem 0; }
+.cv .cv-item {
+  padding-right: 0;
+}
+.cv .cv-remove {
+  display: inline;
+  width: auto;
+  height: auto;
+  margin-left: 0.4rem;
+  border: 0;
+  padding: 0 0.15rem;
+  background: transparent;
+  color: #9a3412;
+  font: 12pt/1 "Times New Roman", Times, serif;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+.cv .cv-remove:hover,
+.cv .cv-remove:focus {
+  color: #7f1d1d;
+  text-decoration: underline;
+}
+@media print {
+  .cv .cv-remove { display: none !important; }
+}
 .cv-bullet,
 .cv-edit { cursor: text; border-radius: 2px; outline: none; }
 .cv-bullet:hover,
@@ -78,7 +102,8 @@
 .cv-bullet.is-saved,
 .cv-edit.is-saved { background: #ecfccb; }
 .cv-bullet.is-error,
-.cv-edit.is-error { background: #ffe4e6; }
+.cv-edit.is-error,
+.cv-item.is-error { background: #ffe4e6; }
 .cv-fmt {
   position: absolute;
   z-index: 40;

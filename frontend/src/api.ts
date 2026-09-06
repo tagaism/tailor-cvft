@@ -34,9 +34,11 @@ async function request<T>(path: string, init: RequestInit = {}, timeoutMs = 30_0
 async function buildJobStream(
   id: number,
   style: string,
+  identity = 0,
   onReasoning?: (lines: string[]) => void,
 ): Promise<Job> {
-  const response = await fetch(`/api/jobs/${id}/build?style=${encodeURIComponent(style)}`, {
+  const params = new URLSearchParams({ style, identity: String(identity) });
+  const response = await fetch(`/api/jobs/${id}/build?${params}`, {
     method: "POST",
     headers: { Accept: "text/event-stream" },
     signal: AbortSignal.timeout(600_000),
@@ -120,8 +122,8 @@ export const api = {
     request<Job>(`/api/jobs/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteJob: (id: number) => request<{ ok: boolean }>(`/api/jobs/${id}`, { method: "DELETE" }),
   refetchJob: (id: number) => request<Job>(`/api/jobs/${id}/refetch`, { method: "POST" }),
-  buildJob: (id: number, style = "times", onReasoning?: (lines: string[]) => void) =>
-    buildJobStream(id, style, onReasoning),
+  buildJob: (id: number, style = "times", identity = 0, onReasoning?: (lines: string[]) => void) =>
+    buildJobStream(id, style, identity, onReasoning),
   companies: () => request<{ companies: Company[] }>("/api/companies"),
   createCompany: (payload: Record<string, string>) =>
     request<Company>("/api/companies", { method: "POST", body: JSON.stringify(payload) }),
