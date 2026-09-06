@@ -241,7 +241,7 @@ cd frontend && npm install            # eslint
 ./scripts/lint.sh
 ```
 
-Point Git at `.githooks` so **`git commit` checks the message**, **`git push` checks the branch name**, then runs the linters. A bad name or message is rejected.
+Point Git at `.githooks` so **`git commit` checks the message**, **`git push` rejects `main`**, checks the branch name, then runs the linters. A direct push to `main`, a bad name, or a bad message is rejected.
 
 ```bash
 git config core.hooksPath .githooks

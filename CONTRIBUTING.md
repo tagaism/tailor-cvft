@@ -6,7 +6,18 @@ Enable the repo hooks once (lint + these checks):
 git config core.hooksPath .githooks
 ```
 
-`git commit` validates the message. `git push` validates the branch name, then runs `./scripts/lint.sh`. Bypass with `--no-verify` only if you must.
+`git commit` validates the message. `git push` rejects **direct pushes to `main`**, validates the branch name, then runs `./scripts/lint.sh`. Bypass with `--no-verify` only if you must.
+
+## Do not push to `main`
+
+Work on a feature branch and merge with a pull request.
+
+```bash
+git checkout -b feat/your-change
+git push -u origin feat/your-change
+```
+
+`git push origin main` (and `HEAD:main`) is rejected by the pre-push hook. GitHub also has an active **Protect main** ruleset: updates must go through a pull request (`--no-verify` cannot bypass the remote). You can still merge your own PRs; no extra approval is required.
 
 ## Branch names
 
