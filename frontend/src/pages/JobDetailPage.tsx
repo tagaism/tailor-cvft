@@ -128,6 +128,8 @@ export default function JobDetailPage() {
   useEffect(() => {
     if (!identities.length || !job) return;
     setIdentityIndex(matchIdentityIndex(identities, job.generation));
+    // job.generation is enough; listing `job` would reset the contact select on every field edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- identity follows job/generation ids
   }, [job?.id, job?.generation?.id, identities]);
 
   function patch<K extends keyof Job>(key: K, value: Job[K]) {

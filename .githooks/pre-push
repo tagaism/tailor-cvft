@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Block pushes to main, check feature-branch names, then run linters.
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+
+while read -r _local_ref local_sha remote_ref _remote_sha; do
+  [[ -z "${remote_ref:-}" ]] && continue
+  case "$remote_ref" in
+    refs/heads/*)
+      branch="${remote_ref#refs/heads/}"
+      "$ROOT/scripts/check-protected-push.sh" "$branch" || exit 1
+      # Deleting a feature branch is fine; creating/updating still needs a valid name.
+      if [[ ! "$local_sha" =~ ^0+$ ]]; then
+        "$ROOT/scripts/check-branch-name.sh" "$branch" || exit 1
+      fi
+      ;;
+  esac
+done
+
+exec "$ROOT/scripts/lint.sh"

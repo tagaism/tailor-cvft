@@ -157,8 +157,9 @@ You should see `200`.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 cp .env.example .env
+git config core.hooksPath .githooks
 ```
 
 Start LM Studio on `http://127.0.0.1:1234`, then:
@@ -229,6 +230,26 @@ The system prompt is in [`app/services/llm.py`](app/services/llm.py).
 - Match report lists real gaps — it is not a pep talk
 
 If JSON is cut off mid-stream (Gemma sometimes spends a minute reasoning first), the app tries to repair the object so a finished CV is not thrown away.
+
+## Lint
+
+Python is checked with [Ruff](https://docs.astral.sh/ruff/); the UI with ESLint and `tsc`.
+
+```bash
+pip install -r requirements-dev.txt   # ruff
+cd frontend && npm install            # eslint
+./scripts/lint.sh
+```
+
+Point Git at `.githooks` so **`git commit` checks the message**, **`git push` rejects `main`**, checks the branch name, then runs the linters. A direct push to `main`, a bad name, or a bad message is rejected.
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Branch names look like `feat/multiple-contacts`. Commit subjects look like `feat: add multiple contacts to the profile`. Full rules: [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Bypass with `git commit --no-verify` / `git push --no-verify` only if you must.
 
 ## Stack
 
