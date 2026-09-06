@@ -78,6 +78,8 @@ def letter_html(value: str) -> str:
 
 
 _DELETE_ROOTS = frozenset({"certifications", "additional_skills"})
+_EXPERIENCE_BULLET_RE = re.compile(r"^experience\.(\d+)\.bullets\.(\d+)$")
+_PROJECT_JOIN = " — "
 
 
 def apply_cv_path(cv: dict[str, Any], path: str, value: str) -> None:
@@ -91,6 +93,42 @@ def apply_cv_path(cv: dict[str, Any], path: str, value: str) -> None:
     last = parts[-1]
     key = int(last) if last.isdigit() else last
     node[key] = value
+    _sync_experience_project(cv, path, value)
+
+
+def _sync_experience_project(cv: dict[str, Any], path: str, value: str) -> None:
+    """Keep role.projects in line with an edited display bullet.
+
+    Preview and PDF rebuild bullets from projects, so a bullets-only write
+    looks saved in the editor and then reverts on reload.
+    """
+    match = _EXPERIENCE_BULLET_RE.fullmatch(path or "")
+    if not match:
+        return
+    roles = cv.get("experience")
+    if not isinstance(roles, list):
+        return
+    role = roles[int(match.group(1))]
+    if not isinstance(role, dict):
+        return
+    index = int(match.group(2))
+    projects = role.get("projects")
+    if not isinstance(projects, list):
+        projects = []
+        role["projects"] = projects
+    while len(projects) <= index:
+        projects.append({"summary": "", "impact": ""})
+    text = value or ""
+    if _PROJECT_JOIN in text:
+        summary, impact = text.split(_PROJECT_JOIN, 1)
+    else:
+        summary, impact = text, ""
+    item = projects[index]
+    if not isinstance(item, dict):
+        item = {}
+        projects[index] = item
+    item["summary"] = summary
+    item["impact"] = impact
 
 
 def delete_cv_path(cv: dict[str, Any], path: str) -> None:

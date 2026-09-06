@@ -91,10 +91,22 @@ export default function JobDetailPage() {
   const [cvStyle, setCvStyle] = useState<CvStyle>("times");
   const [identities, setIdentities] = useState<ContactIdentity[]>([]);
   const [identityIndex, setIdentityIndex] = useState(0);
+  const [letterTick, setLetterTick] = useState(0);
 
   useEffect(() => {
     api.health().then((data) => setStatuses(data.statuses)).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      const data = event.data as { type?: string; jobId?: number } | null;
+      if (!data || data.type !== "cv-contact-changed") return;
+      if (jobId == null || Number(data.jobId) !== jobId) return;
+      setLetterTick((tick) => tick + 1);
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [jobId]);
 
   useEffect(() => {
     api
@@ -509,7 +521,8 @@ export default function JobDetailPage() {
                   </Typography>
                 )}
                 <Typography color="text.secondary">
-                  Click the intro or a bullet in the preview to edit. Use B / I. Click outside to save.
+                  Click the intro, name, email, or a bullet in the preview to edit. Use B / I. Click outside to save.
+                  Name and email must match a pair on your profile.
                   Hover a certification or additional skill and click × to remove it.
                 </Typography>
               </Box>
@@ -555,7 +568,7 @@ export default function JobDetailPage() {
             <Box
               component="iframe"
               title="Cover letter"
-              src={`${apiOrigin}/jobs/${job.id}/cover-letter?g=${job.generation.id}`}
+              src={`${apiOrigin}/jobs/${job.id}/cover-letter?g=${job.generation.id}&c=${letterTick}`}
               sx={{ width: "100%", height: 640, border: 0, bgcolor: "background.default" }}
             />
           </Paper>

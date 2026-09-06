@@ -10,8 +10,18 @@
 {% endif %}
 <article class="cv"{% if job %} data-job-id="{{ job.id }}"{% endif %}>
   <header class="cv-header">
-    <h1>{{ cv.contact.full_name or 'Your name' }}</h1>
-    <p class="contact-line">{{ cv_contact_bits(cv) | join(' | ') }}</p>
+    <h1 class="cv-edit" data-path="contact.full_name">{{ cv.contact.full_name or 'Your name' }}</h1>
+    <p class="contact-line">
+      {%- set sep = joiner(" | ") -%}
+      {%- if cv.contact.location %}{{ sep() }}{{ cv.contact.location }}{% endif -%}
+      {%- if cv.contact.phone %}{{ sep() }}{{ cv.contact.phone }}{% endif -%}
+      {%- if cv.contact.linkedin %}{{ sep() }}{{ cv.contact.linkedin | replace("https://", "") | replace("http://", "") | replace("www.", "") | trim("/") }}{% endif -%}
+      {%- if job or cv.contact.email -%}
+        {{ sep() }}<span class="cv-edit" data-path="contact.email">{% if cv.contact.email %}{{ cv.contact.email }}{% endif %}</span>
+      {%- elif cv.contact.github -%}
+        {{ sep() }}{{ cv.contact.github | replace("https://", "") | replace("http://", "") | replace("www.", "") | trim("/") }}
+      {%- endif -%}
+    </p>
   </header>
 
   {% if job or cv.summary %}
@@ -123,7 +133,7 @@
   {% endif %}
 </article>
 {% if job %}
-<script src="/static/cv-edit.js?v=delete3"></script>
+<script src="/static/cv-edit.js?v=save3"></script>
 {% endif %}
 {% if standalone %}
 </body>

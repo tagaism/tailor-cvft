@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,6 +9,16 @@ from fastapi.staticfiles import StaticFiles
 from app.config import ensure_data_dirs, settings
 from app.db import init_db
 from app.routers import api, jobs
+
+
+def _configure_logging() -> None:
+    log = logging.getLogger("app")
+    if log.handlers:
+        return
+    log.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+    log.addHandler(handler)
 
 
 def _cors_origins() -> list[str]:
@@ -22,6 +33,7 @@ def _cors_origins() -> list[str]:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    _configure_logging()
     ensure_data_dirs()
     init_db()
     yield
