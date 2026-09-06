@@ -4,7 +4,10 @@ import TextField from "@mui/material/TextField";
 /** Only http(s) job links. javascript/data/file URLs must not run or download via window.open. */
 function hrefFor(url: string): string | null {
   const raw = url.trim();
-  if (!raw || /[\u0000-\u001F\u007F]/.test(raw)) return null;
+  if (!raw || [...raw].some((ch) => {
+    const code = ch.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f;
+  })) return null;
   if (/^(javascript|data|vbscript|file):/i.test(raw)) return null;
   try {
     const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Runs frontend + backend linters before git push.
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+exec "$ROOT/scripts/lint.sh"

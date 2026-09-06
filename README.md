@@ -157,8 +157,9 @@ You should see `200`.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 cp .env.example .env
+git config core.hooksPath .githooks
 ```
 
 Start LM Studio on `http://127.0.0.1:1234`, then:
@@ -229,6 +230,24 @@ The system prompt is in [`app/services/llm.py`](app/services/llm.py).
 - Match report lists real gaps — it is not a pep talk
 
 If JSON is cut off mid-stream (Gemma sometimes spends a minute reasoning first), the app tries to repair the object so a finished CV is not thrown away.
+
+## Lint
+
+Python is checked with [Ruff](https://docs.astral.sh/ruff/); the UI with ESLint and `tsc`.
+
+```bash
+pip install -r requirements-dev.txt   # ruff
+cd frontend && npm install            # eslint
+./scripts/lint.sh
+```
+
+Point Git at `.githooks` so **`git push` runs the same checks** and refuses to push if they fail:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+`SKIP=1 git push` is not wired; if you need to bypass, use `git push --no-verify`.
 
 ## Stack
 

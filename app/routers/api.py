@@ -16,7 +16,15 @@ from app.db import get_db
 from app.forms import parse_skill_text
 from app.models import Company, Generation, Job
 from app.profile_store import load_profile, save_profile
-from app.schemas import APPLICATION_STATUSES, ApplicationStatus, ContactIdentity, CvStyle, Profile, ShokumuPack, TailorPack
+from app.schemas import (
+    APPLICATION_STATUSES,
+    ApplicationStatus,
+    ContactIdentity,
+    CvStyle,
+    Profile,
+    ShokumuPack,
+    TailorPack,
+)
 from app.serializers import company_payload, job_payload
 from app.services.companies import apply_status, get_or_create_company, link_job_company, normalize_company_name
 from app.services.llm import LLMError, extract_profile_from_cv, llm_health, tailor_pack, tailor_shokumu_pack

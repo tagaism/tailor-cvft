@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
 from app.db import Base
-from app.schemas import ApplicationStatus, STATUS_LABELS
+from app.schemas import STATUS_LABELS, ApplicationStatus
 
 
 def _utcnow() -> datetime:
